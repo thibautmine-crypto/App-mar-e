@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<title>Marées</title>
+<meta name="theme-color" content="#04264c" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Marées" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<link rel="icon" href="icon-180.png" />
+<link rel="manifest" href="manifest.webmanifest" />
+<style>
+  :root {
+    --top: #0a6ab0; --bottom: #04264c;
+    --high: #66d9ff; --low: #fbe6b4;
+    --card: rgba(255,255,255,.10); --stroke: rgba(255,255,255,.14);
+    --txt: #fff; --faint: rgba(255,255,255,.75); --fainter: rgba(255,255,255,.5);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { margin: 0; background: var(--bottom); }
+  body { margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    color: var(--txt);
+    background: linear-gradient(180deg, var(--top), var(--bottom) 70%, var(--bottom));
+    min-height: 100dvh;
+    padding: max(16px, env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+
+  header { display: flex; align-items: center; justify-content: space-between; margin: 4px 4px 18px; }
+  h1 { font-size: 34px; font-weight: 800; letter-spacing: -.02em; margin: 0; }
+  .port-btn {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 4px;
+    background: none; border: 0; color: var(--faint); font-size: 15px; font-weight: 500;
+    font-family: inherit; padding: 0; cursor: pointer;
+  }
+  .port-btn svg { width: 15px; height: 15px; }
+  .spinner { width: 22px; height: 22px; border: 2.5px solid rgba(255,255,255,.25);
+    border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .card {
+    background: var(--card); border: 1px solid var(--stroke);
+    border-radius: 28px; padding: 20px; margin-bottom: 16px;
+    backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
+    box-shadow: 0 14px 40px rgba(0,0,0,.18);
+  }
+  .hero { background: linear-gradient(160deg, rgba(102,217,255,.30), rgba(10,106,176,.35)); }
+
+  .trend { font-size: 15px; font-weight: 600; color: var(--faint); display: flex; align-items: center; gap: 6px; }
+  .now-row { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 10px; }
+  .height { font-size: 64px; font-weight: 800; letter-spacing: -.03em; line-height: 1;
+    font-variant-numeric: tabular-nums; }
+  .height small { font-size: 24px; font-weight: 600; color: var(--faint); }
+  .coef { text-align: center; }
+  .coef b { display: block; font-size: 30px; font-weight: 800; }
+  .coef span { font-size: 12px; color: var(--faint); }
+
+  .divider { height: 1px; background: rgba(255,255,255,.18); margin: 16px 0; }
+  .next { display: flex; align-items: center; gap: 12px; }
+  .next .ic { width: 34px; height: 34px; flex: 0 0 34px; }
+  .next .lbl { font-size: 13px; color: var(--faint); }
+  .next .val { font-size: 17px; font-weight: 700; }
+  .pill { margin-left: auto; background: rgba(255,255,255,.18); border-radius: 999px;
+    padding: 6px 12px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+
+  .card h2 { font-size: 17px; font-weight: 700; margin: 0 0 12px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 7px 0; }
+  .row .ic { width: 22px; height: 22px; flex: 0 0 22px; }
+  .row .type { font-size: 15px; color: var(--faint); }
+  .row .rcoef { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--faint);
+    background: rgba(255,255,255,.12); border-radius: 999px; padding: 3px 8px; }
+  .row .h { width: 66px; text-align: right; font-size: 15px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .row .t { width: 52px; text-align: right; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .row.past { opacity: .45; }
+  .daygroup + .daygroup { border-top: 1px solid rgba(255,255,255,.12); margin-top: 8px; padding-top: 8px; }
+  .dayname { font-size: 14px; font-weight: 600; color: var(--faint); margin: 4px 0; }
+
+  svg.chart { width: 100%; height: 200px; display: block; }
+
+  /* Feuille de recherche */
+  .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.4); backdrop-filter: blur(6px);
+    display: none; align-items: flex-end; z-index: 20; }
+  .sheet-bg.open { display: flex; }
+  .sheet { background: #0b3358; width: 100%; max-height: 82dvh; border-radius: 24px 24px 0 0;
+    padding: 14px 16px calc(20px + env(safe-area-inset-bottom)); overflow-y: auto;
+    box-shadow: 0 -10px 40px rgba(0,0,0,.4); }
+  .sheet .grab { width: 40px; height: 5px; background: rgba(255,255,255,.3); border-radius: 3px; margin: 4px auto 12px; }
+  .search-in { width: 100%; font-size: 17px; font-family: inherit; color: #fff;
+    background: rgba(255,255,255,.12); border: 1px solid var(--stroke); border-radius: 14px;
+    padding: 12px 14px; outline: none; }
+  .search-in::placeholder { color: var(--fainter); }
+  .result { display: flex; align-items: center; gap: 12px; padding: 14px 6px; width: 100%;
+    background: none; border: 0; border-bottom: 1px solid rgba(255,255,255,.08); color: #fff;
+    font-family: inherit; font-size: 16px; text-align: left; cursor: pointer; }
+  .result small { display: block; color: var(--faint); font-size: 12px; }
+
+  .state { text-align: center; color: var(--faint); padding: 60px 20px; }
+  .state svg { width: 40px; height: 40px; margin-bottom: 12px; }
+  .btn { font-family: inherit; font-size: 16px; font-weight: 600; color: #fff;
+    background: rgba(255,255,255,.18); border: 0; border-radius: 14px; padding: 12px 20px; margin-top: 14px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Marées</h1>
+      <button class="port-btn" id="portBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-5.6-7-11a7 7 0 0 1 14 0c0 5.4-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+        <span id="portName">…</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:12px;height:12px"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+    </div>
+    <div id="headSpin"></div>
+  </header>
+  <main id="content"><div class="state"><div class="spinner" style="margin:0 auto"></div></div></main>
+</div>
+
+<div class="sheet-bg" id="sheetBg">
+  <div class="sheet" id="sheet">
+    <div class="grab"></div>
+    <input class="search-in" id="searchIn" placeholder="Saint-Malo, Brest, La Rochelle…" autocomplete="off" />
+    <div id="results"></div>
+  </div>
+</div>
+
+<script>
+// Base de l'API. Sous le Cloudflare Worker, tout est same-origin → "/api".
+const API_BASE = (window.MAREE_API_BASE ?? "/api");
+const DEFAULT_PORT = { id: 17, nom: "Saint-Malo", lat: 48.6539, lon: -2.01563, time_zone: "Europe/Paris" };
+
+const $ = (s) => document.querySelector(s);
+let state = { port: loadPort(), tides: [], loading: false, error: null };
+let tick = null;
+
+function loadPort() {
+  try { return JSON.parse(localStorage.getItem("maree.port")) || DEFAULT_PORT; }
+  catch { return DEFAULT_PORT; }
+}
+function savePort(p) { localStorage.setItem("maree.port", JSON.stringify(p)); }
+
+// ---- Réseau
+async function apiSearch(q) {
+  const r = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`);
+  if (!r.ok) throw new Error("http " + r.status);
+  const j = await r.json();
+  return (j.contenu || []).filter((p) => p.presence_maree !== false);
+}
+async function apiTides(lat, lon) {
+  const r = await fetch(`${API_BASE}/tides?lat=${lat}&lon=${lon}`);
+  if (!r.ok) throw new Error("http " + r.status);
+  const j = await r.json();
+  const days = (j.contenu && j.contenu.marees) || [];
+  const out = [];
+  for (const d of days) for (const e of (d.etales || [])) {
+    out.push({
+      date: new Date(e.datetime),
+      hhmm: String(e.datetime).slice(11, 16),
+      type: e.type_etale, hauteur: e.hauteur, coef: e.coef,
+    });
+  }
+  out.sort((a, b) => a.date - b.date);
+  return out;
+}
+
+// ---- Calculs
+function surrounding(now, t) {
+  let prev = null, next = null;
+  for (const x of t) { if (x.date <= now) prev = x; else { next = x; break; } }
+  return { prev, next };
+}
+function heightNow(now, t) {
+  const { prev, next } = surrounding(now, t);
+  if (!prev || !next) return null;
+  const span = next.date - prev.date; if (span <= 0) return prev.hauteur;
+  const k = (now - prev.date) / span;
+  return prev.hauteur + (next.hauteur - prev.hauteur) * (1 - Math.cos(Math.PI * k)) / 2;
+}
+function coefNow(now, t) {
+  const { next } = surrounding(now, t);
+  if (next && next.type === "PM" && next.coef != null) return next.coef;
+  const highs = t.filter((x) => x.type === "PM" && x.coef != null);
+  if (!highs.length) return null;
+  highs.sort((a, b) => Math.abs(a.date - now) - Math.abs(b.date - now));
+  return highs[0].coef;
+}
+const isHigh = (x) => x.type === "PM";
+const metres = (h) => h == null ? "—" : h.toFixed(2).replace(".", ",");
+function dur(ms) { const s = Math.max(0, ms/1000|0), h = s/3600|0, m = (s%3600)/60|0;
+  return h ? `${h} h ${String(m).padStart(2,"0")}` : `${m} min`; }
+function sameDay(a, b) { return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+function dayName(d) { return d.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"short" }); }
+
+// ---- Icônes (SVG inline)
+function arrow(up, cls) {
+  const c = up ? "var(--high)" : "var(--low)";
+  const path = up ? "M12 19V5M6 11l6-6 6 6" : "M12 5v14M6 13l6 6 6-6";
+  return `<svg class="${cls||''}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
+}
+
+// ---- Rendu
+function render() {
+  const now = new Date();
+  $("#portName").textContent = state.port.nom;
+  $("#headSpin").innerHTML = state.loading && state.tides.length ? '<div class="spinner"></div>' : "";
+
+  if (state.error && !state.tides.length) {
+    $("#content").innerHTML = `<div class="state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><line x1="12" y1="20" x2="12" y2="20"/><line x1="3" y1="3" x2="21" y2="21"/></svg>
+      <div>${state.error}</div><button class="btn" onclick="load()">Réessayer</button></div>`;
+    return;
+  }
+  if (!state.tides.length) {
+    $("#content").innerHTML = '<div class="state"><div class="spinner" style="margin:0 auto"></div></div>';
+    return;
+  }
+
+  const t = state.tides;
+  const { next } = surrounding(now, t);
+  const h = heightNow(now, t);
+  const coef = coefNow(now, t);
+  const today = t.filter((x) => sameDay(x.date, now));
+
+  // Jours suivants (groupés)
+  const groups = {};
+  for (const x of t) { const k = new Date(x.date); k.setHours(0,0,0,0);
+    (groups[k.getTime()] ||= []).push(x); }
+  const keys = Object.keys(groups).map(Number).sort((a,b)=>a-b);
+  const upcoming = keys.slice(1, 6).map((k) => ({ day: new Date(k), tides: groups[k] }));
+
+  $("#content").innerHTML = `
+    <section class="card hero">
+      ${next ? `<div class="trend">${isHigh(next)?'▲ Marée montante':'▼ Marée descendante'}</div>` : ""}
+      <div class="now-row">
+        <div class="height">${metres(h)}<small> m</small></div>
+        ${coef!=null ? `<div class="coef"><b>${coef}</b><span>coef.</span></div>` : ""}
+      </div>
+      ${next ? `
+        <div class="divider"></div>
+        <div class="next">
+          ${arrow(isHigh(next),'ic')}
+          <div><div class="lbl">Prochaine ${isHigh(next)?'pleine mer':'basse mer'}</div>
+          <div class="val">${next.hhmm} · ${metres(next.hauteur)} m</div></div>
+          <div class="pill">dans ${dur(next.date - now)}</div>
+        </div>` : ""}
+    </section>
+
+    <section class="card"><h2>Hauteur d'eau</h2>${chartSVG(now, t)}</section>
+
+    <section class="card"><h2>Aujourd'hui</h2>${today.map((x)=>rowHTML(x, now)).join("")}</section>
+
+    ${upcoming.length ? `<section class="card"><h2>Jours suivants</h2>
+      ${upcoming.map((g)=>`<div class="daygroup"><div class="dayname">${cap(dayName(g.day))}</div>
+        ${g.tides.map((x)=>rowHTML(x, now)).join("")}</div>`).join("")}
+    </section>` : ""}`;
+}
+
+function rowHTML(x, now) {
+  return `<div class="row ${x.date<now?'past':''}">
+    ${arrow(isHigh(x),'ic')}
+    <span class="type">${isHigh(x)?'Pleine mer':'Basse mer'}</span>
+    ${x.coef!=null?`<span class="rcoef">${x.coef}</span>`:''}
+    <span class="h">${metres(x.hauteur)} m</span>
+    <span class="t">${x.hhmm}</span></div>`;
+}
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// ---- Courbe SVG (fenêtre -3h → +9h)
+function chartSVG(now, t) {
+  const W = 600, H = 200, padL = 4, padR = 4, padT = 24, padB = 22;
+  const start = new Date(now.getTime() - 3*3600e3), end = new Date(now.getTime() + 9*3600e3);
+  const pts = [];
+  for (let ms = start.getTime(); ms <= end.getTime(); ms += 600e3) {
+    const hv = heightNow(new Date(ms), t); if (hv != null) pts.push([ms, hv]);
+  }
+  if (pts.length < 2) return "";
+  const inWin = t.filter((x) => x.date >= start && x.date <= end);
+  const hs = pts.map((p)=>p[1]).concat(inWin.map((x)=>x.hauteur));
+  let lo = Math.min(...hs), hi = Math.max(...hs); const pad = (hi-lo)*0.15 || 1; lo -= pad; hi += pad;
+  const X = (ms) => padL + (ms - start) / (end - start) * (W - padL - padR);
+  const Y = (h) => padT + (1 - (h - lo)/(hi - lo)) * (H - padT - padB);
+
+  const line = pts.map((p,i)=>`${i?'L':'M'}${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join(" ");
+  const area = `${line} L${X(pts[pts.length-1][0]).toFixed(1)} ${H-padB} L${X(pts[0][0]).toFixed(1)} ${H-padB} Z`;
+  const nx = X(now.getTime()), ny = Y(heightNow(now, t) ?? lo);
+
+  const dots = inWin.map((x)=>{
+    const cx = X(x.date.getTime()), cy = Y(x.hauteur);
+    const above = isHigh(x);
+    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.2" fill="#fff"/>
+      <text x="${cx.toFixed(1)}" y="${(above?cy-8:cy+16).toFixed(1)}" fill="rgba(255,255,255,.85)"
+        font-size="11" font-weight="600" text-anchor="middle">${x.hhmm}</text>`;
+  }).join("");
+
+  // Graduations horaires
+  const ticks = [];
+  const d0 = new Date(start); d0.setMinutes(0,0,0);
+  for (let ms = d0.getTime(); ms <= end.getTime(); ms += 3*3600e3) {
+    if (ms < start.getTime()) continue;
+    const hh = new Date(ms).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+    ticks.push(`<text x="${X(ms).toFixed(1)}" y="${H-6}" fill="rgba(255,255,255,.55)" font-size="10" text-anchor="middle">${hh}</text>`);
+  }
+
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#66d9ff" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#0a6ab0" stop-opacity="0"/></linearGradient></defs>
+    <path d="${area}" fill="url(#fill)"/>
+    <path d="${line}" fill="none" stroke="#8fe3ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="${nx.toFixed(1)}" y1="${padT-6}" x2="${nx.toFixed(1)}" y2="${H-padB}" stroke="rgba(255,255,255,.55)" stroke-width="1.4" stroke-dasharray="4 4"/>
+    <circle cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="5" fill="#fff"/>
+    ${dots}${ticks.join("")}
+  </svg>`;
+}
+
+// ---- Chargement
+async function load() {
+  state.loading = true; state.error = null; render();
+  try {
+    state.tides = await apiTides(state.port.lat, state.port.lon);
+    if (!state.tides.length) state.error = "Aucune donnée de marée pour ce port.";
+  } catch (e) {
+    state.error = "Impossible de charger les marées. Vérifie ta connexion.";
+  }
+  state.loading = false; render();
+}
+
+// ---- Recherche
+let searchTimer = null;
+$("#portBtn").onclick = () => { $("#sheetBg").classList.add("open"); setTimeout(()=>$("#searchIn").focus(), 50); };
+$("#sheetBg").onclick = (e) => { if (e.target === $("#sheetBg")) close(); };
+function close() { $("#sheetBg").classList.remove("open"); }
+$("#searchIn").oninput = (e) => {
+  clearTimeout(searchTimer);
+  const q = e.target.value.trim();
+  if (q.length < 2) { $("#results").innerHTML = ""; return; }
+  searchTimer = setTimeout(async () => {
+    $("#results").innerHTML = '<div style="padding:14px;color:var(--faint)">Recherche…</div>';
+    try {
+      const list = await apiSearch(q);
+      $("#results").innerHTML = list.map((p, i) =>
+        `<button class="result" data-i="${i}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="2" style="width:20px;height:20px;flex:0 0 20px"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/></svg>
+          <span>${p.nom}<small>${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}</small></span></button>`
+      ).join("") || '<div style="padding:14px;color:var(--faint)">Aucun port trouvé.</div>';
+      Array.from(document.querySelectorAll(".result")).forEach((btn) => {
+        btn.onclick = () => {
+          const p = list[+btn.dataset.i];
+          state.port = { id: p.id, nom: p.nom, lat: p.lat, lon: p.lon, time_zone: p.time_zone };
+          savePort(state.port); close(); $("#searchIn").value = ""; $("#results").innerHTML = "";
+          state.tides = []; load();
+        };
+      });
+    } catch { $("#results").innerHTML = '<div style="padding:14px;color:var(--faint)">Recherche impossible.</div>'; }
+  }, 350);
+};
+
+// ---- Cycle de vie
+function startTick() { clearInterval(tick); tick = setInterval(render, 30000); }
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+load(); startTick();
+
+// Service worker (mode hors-ligne léger)
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>

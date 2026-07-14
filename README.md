@@ -8,9 +8,9 @@ Les données proviennent de l'**API publique Météo Consult Marine** (source SH
 la même que celle utilisée par le projet Home Assistant
 [`saniho/apiMareeInfo`](https://github.com/saniho/apiMareeInfo). **Aucune clé API requise.**
 
-> 🛟 **Pas de Mac / pas envie d'installer Xcode ?** Une version **widget sans Xcode** est
-> fournie via l'app gratuite **Scriptable**, installable directement depuis l'iPhone :
-> voir [`Scriptable/README.md`](./Scriptable/README.md).
+> 🛟 **Pas de Mac / pas envie d'installer Xcode ?** Deux versions sans Xcode :
+> - **Web app (PWA)** style Apple, à mettre sur l'écran d'accueil en 5 min → [`web/README.md`](./web/README.md)
+> - **Widget** écran d'accueil via l'app gratuite **Scriptable** → [`Scriptable/README.md`](./Scriptable/README.md)
 
 ---
 
