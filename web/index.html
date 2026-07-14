@@ -41,6 +41,18 @@
   }
   .port-btn:active { transform: scale(.96); opacity: .7; }
   .port-btn svg { width: 15px; height: 15px; }
+  .hright { display: flex; align-items: center; gap: 10px; }
+  .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+    color: #fff; background: rgba(255,255,255,.12); border: 1px solid var(--stroke); border-radius: 50%;
+    cursor: pointer; transition: transform .1s, background .15s; }
+  .icon-btn:active { transform: scale(.9); background: rgba(255,255,255,.22); }
+  .icon-btn svg { width: 19px; height: 19px; }
+  #chartHost { position: relative; touch-action: pan-y; }
+  #scrubTip { position: absolute; top: -2px; transform: translateX(-50%); display: none; z-index: 2;
+    background: rgba(8,34,60,.92); border: 1px solid rgba(255,255,255,.18); color: #fff;
+    font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 10px; white-space: nowrap;
+    pointer-events: none; backdrop-filter: blur(8px); box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+  #scrubTip b { font-weight: 800; }
   .spinner { width: 22px; height: 22px; border: 2.5px solid rgba(255,255,255,.25);
     border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -182,7 +194,12 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:12px;height:12px"><path d="M6 9l6 6 6-6"/></svg>
       </button>
     </div>
-    <div id="headSpin"></div>
+    <div class="hright">
+      <div id="headSpin"></div>
+      <button class="icon-btn" id="shareBtn" aria-label="Partager l'image">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg>
+      </button>
+    </div>
   </header>
   <main id="content"></main>
   <footer class="copyright">© MineDigital</footer>
@@ -401,7 +418,7 @@ function renderAll(animate) {
         </div>` : ""}
     </section>
 
-    <section class="card ${a(1)}"><h2>Hauteur d'eau</h2><div id="chartHost">${chartSVG(now, t, animate)}</div></section>
+    <section class="card ${a(1)}"><h2>Hauteur d'eau</h2><div id="chartHost">${chartSVG(now, t, animate)}<div id="scrubTip"></div></div></section>
 
     ${weatherCard(a(2))}
 
@@ -414,6 +431,7 @@ function renderAll(animate) {
         ${g.tides.map((x)=>rowHTML(x, now)).join("")}</div>`).join("")}</section>` : ""}`;
 
   tickLive(); // positionne niveau d'eau, barre, marqueur "maintenant"
+  wireChart(); // active le scrub tactile sur la courbe
 }
 
 function renderSkeleton() {
@@ -568,7 +586,131 @@ function chartSVG(now, t, animate) {
     <line id="nowLine" x1="${nx.toFixed(1)}" y1="${padT-8}" x2="${nx.toFixed(1)}" y2="${H-padB}" stroke="rgba(255,255,255,.55)" stroke-width="1.4" stroke-dasharray="4 4"/>
     <circle id="nowPulse" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="5" fill="#8fe3ff"/>
     <circle id="nowDot" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="5" fill="#fff"/>
-    ${dots}${ticks.join("")}${sunMk}</svg>`;
+    ${dots}${ticks.join("")}${sunMk}
+    <line id="scrubLine" x1="0" y1="${(padT-8).toFixed(1)}" x2="0" y2="${(H-padB).toFixed(1)}" stroke="#fff" stroke-width="1.4" style="display:none"/>
+    <circle id="scrubDot" cx="0" cy="0" r="5.5" fill="#fff" stroke="#0a6ab0" stroke-width="2" style="display:none"/></svg>`;
+}
+
+// ---- Scrub tactile sur la courbe (comme l'app Météo d'Apple)
+function wireChart() {
+  const host = document.getElementById("chartHost");
+  if (!host || !chart) return;
+  const svg = host.querySelector("svg.chart");
+  const tip = host.querySelector("#scrubTip");
+  const line = svg.querySelector("#scrubLine"), dot = svg.querySelector("#scrubDot");
+  const Y = (h) => chart.padT + (1 - (h - chart.lo)/(chart.hi - chart.lo)) * (chart.H - chart.padT - chart.padB);
+  let active = false;
+
+  const show = (clientX) => {
+    const r = svg.getBoundingClientRect();
+    const px = Math.min(r.width, Math.max(0, clientX - r.left));
+    const vbX = px / r.width * chart.W;
+    const frac = Math.min(1, Math.max(0, (vbX - chart.padL) / (chart.W - chart.padL - chart.padR)));
+    const ms = chart.startMs + frac * (chart.endMs - chart.startMs);
+    const d = new Date(ms), h = heightNow(d, state.tides);
+    line.setAttribute("x1", vbX.toFixed(1)); line.setAttribute("x2", vbX.toFixed(1));
+    line.style.display = "";
+    if (h != null) { dot.setAttribute("cx", vbX.toFixed(1)); dot.setAttribute("cy", Y(h).toFixed(1)); dot.style.display = ""; }
+    tip.innerHTML = `<b>${heureTZ(d, state.port.time_zone)}</b>${h != null ? " · " + metres(h) + " m" : ""}`;
+    tip.style.display = "block";
+    tip.style.left = Math.min(r.width - 6, Math.max(6, px)) + "px";
+  };
+  const end = () => { active = false; line.style.display = "none"; dot.style.display = "none"; tip.style.display = "none"; };
+
+  host.onpointerdown = (e) => { active = true; show(e.clientX); };
+  host.onpointermove = (e) => { if (active) show(e.clientX); };
+  host.onpointerup = end; host.onpointercancel = end; host.onpointerleave = end;
+}
+
+// ---- Image à partager (canvas 1080×1350, épurée)
+function buildShareCanvas() {
+  const S = 3, W = 360*S, H = 450*S, m = 30*S;
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const g = cv.getContext("2d");
+  const fam = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  const bg = g.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, "#0b6fb4"); bg.addColorStop(1, "#04264c");
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  const glow = g.createRadialGradient(W*0.5, -H*0.1, 0, W*0.5, -H*0.1, H*0.65);
+  glow.addColorStop(0, "rgba(102,217,255,.22)"); glow.addColorStop(1, "rgba(102,217,255,0)");
+  g.fillStyle = glow; g.fillRect(0, 0, W, H);
+
+  const now = new Date();
+  g.textBaseline = "alphabetic"; g.textAlign = "left";
+  g.fillStyle = "#fff"; g.font = `800 ${29*S}px ${fam}`;
+  g.fillText(state.port.nom, m, 58*S);
+  g.fillStyle = "rgba(255,255,255,.7)"; g.font = `500 ${15*S}px ${fam}`;
+  g.fillText(cap(now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })), m, 84*S);
+
+  // Courbe pleine journée
+  const cx0 = m, cx1 = W - m, cy0 = 122*S, cy1 = 250*S;
+  const today = state.tides.filter((x) => sameDay(x.date, now));
+  const base = today.length ? today[0].date : now;
+  const dayStart = new Date(base); dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart.getTime() + 24*3600e3);
+  const pts = [];
+  for (let ms = dayStart.getTime(); ms <= dayEnd.getTime(); ms += 15*60e3) {
+    const h = heightNow(new Date(ms), state.tides); if (h != null) pts.push([ms, h]);
+  }
+  if (pts.length > 1) {
+    const hs = pts.map((p) => p[1]); let lo = Math.min(...hs), hi = Math.max(...hs);
+    const pd = (hi - lo)*0.2 || 1; lo -= pd; hi += pd;
+    const X = (ms) => cx0 + (ms - dayStart) / (dayEnd - dayStart) * (cx1 - cx0);
+    const Y = (h) => cy0 + (1 - (h - lo)/(hi - lo)) * (cy1 - cy0);
+    g.beginPath(); g.moveTo(X(pts[0][0]), Y(pts[0][1]));
+    for (const p of pts) g.lineTo(X(p[0]), Y(p[1]));
+    g.lineTo(X(pts[pts.length-1][0]), cy1); g.lineTo(X(pts[0][0]), cy1); g.closePath();
+    const ag = g.createLinearGradient(0, cy0, 0, cy1);
+    ag.addColorStop(0, "rgba(143,227,255,.42)"); ag.addColorStop(1, "rgba(143,227,255,0)");
+    g.fillStyle = ag; g.fill();
+    g.beginPath(); g.moveTo(X(pts[0][0]), Y(pts[0][1]));
+    for (const p of pts) g.lineTo(X(p[0]), Y(p[1]));
+    g.strokeStyle = "#bfeeff"; g.lineWidth = 3*S; g.lineJoin = "round"; g.lineCap = "round"; g.stroke();
+    g.textAlign = "center";
+    for (const x of today) {
+      const px = X(x.date.getTime()), py = Y(x.hauteur), up = isHigh(x);
+      g.fillStyle = "#fff"; g.beginPath(); g.arc(px, py, 4*S, 0, 7); g.fill();
+      g.font = `700 ${13*S}px ${fam}`; g.fillStyle = "#fff"; g.fillText(x.hhmm, px, up ? py-13*S : py+23*S);
+      g.font = `500 ${11*S}px ${fam}`; g.fillStyle = "rgba(255,255,255,.72)"; g.fillText(metres(x.hauteur)+" m", px, up ? py-30*S : py+39*S);
+    }
+  }
+
+  // Coefficient (gauche) + prochaine marée (droite)
+  const by = 326*S, coef = coefNow(now, state.tides);
+  if (coef != null) {
+    g.textAlign = "left"; g.fillStyle = "rgba(255,255,255,.55)"; g.font = `700 ${12*S}px ${fam}`;
+    g.fillText("COEFFICIENT", m, by);
+    g.fillStyle = "#fff"; g.font = `800 ${50*S}px ${fam}`; g.fillText(String(coef), m, by + 48*S);
+    g.fillStyle = "rgba(255,255,255,.8)"; g.font = `600 ${15*S}px ${fam}`; g.fillText(regime(coef), m, by + 74*S);
+  }
+  const nx = state.tides.find((x) => x.date > now);
+  if (nx) {
+    g.textAlign = "right"; g.fillStyle = "rgba(255,255,255,.55)"; g.font = `700 ${12*S}px ${fam}`;
+    g.fillText(isHigh(nx) ? "PROCHAINE PLEINE MER" : "PROCHAINE BASSE MER", W - m, by);
+    g.fillStyle = "#fff"; g.font = `800 ${40*S}px ${fam}`; g.fillText(nx.hhmm, W - m, by + 44*S);
+    g.fillStyle = "rgba(255,255,255,.8)"; g.font = `600 ${15*S}px ${fam}`; g.fillText(metres(nx.hauteur) + " m", W - m, by + 74*S);
+  }
+
+  g.textAlign = "center"; g.fillStyle = "rgba(255,255,255,.5)"; g.font = `600 ${13*S}px ${fam}`;
+  g.fillText("MARÉES · MineDigital", W/2, H - 26*S);
+  return cv;
+}
+
+async function share() {
+  const btn = document.getElementById("shareBtn");
+  const canvas = buildShareCanvas();
+  canvas.toBlob(async (blob) => {
+    if (!blob) return;
+    const file = new File([blob], "marees.png", { type: "image/png" });
+    const data = { files: [file], title: "Marées", text: `${state.port.nom} — marées du jour` };
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share(data); } catch {}
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = "marees.png"; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+  }, "image/png");
 }
 
 // ---- Tick live (chaque seconde) : compte à rebours, niveau d'eau, marqueur
@@ -684,6 +826,7 @@ $("#searchIn").oninput = (e) => {
 };
 
 // ---- Cycle de vie
+$("#shareBtn").onclick = share;
 load();
 setInterval(tickLive, 1000);                 // mises à jour live à la seconde
 setInterval(() => renderAll(false), 15*60e3); // reslide la fenêtre de la courbe
