@@ -1,0 +1,7 @@
+# Configuration Cloudflare Worker.
+# Permet à `npx wrangler deploy` (build connecté à GitHub) de déployer worker.js.
+# Tout est embarqué dans worker.js (HTML, icônes, proxy /api) : aucun dossier statique requis.
+
+name = "marees"
+main = "worker.js"
+compatibility_date = "2026-07-01"

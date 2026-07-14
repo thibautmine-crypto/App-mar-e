@@ -1,0 +1,17 @@
+# Xcode / Swift
+DerivedData/
+build/
+*.xcworkspace
+!default.xcworkspace
+xcuserdata/
+*.xcuserstate
+.swiftpm/
+
+# Projet généré par XcodeGen (recréé via `xcodegen generate`)
+Maree.xcodeproj/
+
+# macOS
+.DS_Store
+
+# Config locale (clés éventuelles, non versionnées)
+Secrets.local.xcconfig
