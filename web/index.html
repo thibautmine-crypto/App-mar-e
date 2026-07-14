@@ -127,6 +127,34 @@
   .q4 { background: rgba(90,230,160,.18); color: #8ef0c0; }
   .offline { background: rgba(251,191,90,.16); border: 1px solid rgba(251,191,90,.3); color: #ffdca0;
     font-size: 13px; font-weight: 600; text-align: center; padding: 10px 14px; border-radius: 16px; margin-bottom: 14px; }
+
+  /* Ruban de jours */
+  .ribbon { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 12px; margin: -2px 0 4px;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .ribbon::-webkit-scrollbar { display: none; }
+  .pill-day { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 8px 13px;
+    border-radius: 14px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.1);
+    color: var(--faint); font-family: inherit; font-size: 13px; font-weight: 600; white-space: nowrap;
+    cursor: pointer; transition: transform .1s, background .15s; }
+  .pill-day:active { transform: scale(.94); }
+  .pill-day.sel { background: var(--high); color: #04264c; border-color: transparent; }
+  .rk { width: 6px; height: 6px; border-radius: 50%; }
+  .rk-red { background: #ff5a5a; } .rk-amber { background: #ffb84d; }
+  .pill-day.sel .rk-red { background: #c00; } .pill-day.sel .rk-amber { background: #b56a00; }
+
+  /* Bandeau météo du jour sélectionné */
+  .daystrip { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 12px;
+    font-size: 14px; font-weight: 600; color: var(--txt); }
+  .daystrip small { font-size: 12px; font-weight: 500; color: var(--faint); }
+  .daystrip .sep { opacity: .35; }
+
+  /* Alertes sécurité */
+  .alert { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 18px; margin-bottom: 14px; }
+  .alert .ai { font-size: 22px; line-height: 1; }
+  .alert b { display: block; font-size: 14px; }
+  .alert span { font-size: 12px; opacity: .85; }
+  .alert-red { background: rgba(255,90,90,.16); border: 1px solid rgba(255,90,90,.36); color: #ffd4d4; }
+  .alert-amber { background: rgba(255,184,77,.16); border: 1px solid rgba(255,184,77,.34); color: #ffe6bf; }
   .row { display: flex; align-items: center; gap: 12px; padding: 7px 0; transition: opacity .4s; }
   .row .ic { width: 22px; height: 22px; flex: 0 0 22px; }
   .row .type { font-size: 15px; color: var(--faint); }
@@ -222,13 +250,91 @@ const API_BASE = (window.MAREE_API_BASE ?? "/api");
 const DEFAULT_PORT = { id: 17, nom: "Saint-Malo", lat: 48.6539, lon: -2.01563, time_zone: "Europe/Paris" };
 const $ = (s) => document.querySelector(s);
 
-let state = { port: loadPort(), tides: [], hourly: [], lieu: null, loading: false, error: null, stale: null };
+let state = { port: loadPort(), tides: [], hourly: [], daily: [], avis: [], lieu: null, selectedYmd: null, loading: false, error: null, stale: null };
 let chart = null;        // paramètres géométriques de la courbe (pour le tick live)
 let waterRange = null;   // {lo, hi} du jour, pour le niveau d'eau animé
 let lastNextTs = null;   // timestamp de la prochaine marée connue (détection de bascule)
 
 function loadPort() { try { return JSON.parse(localStorage.getItem("maree.port")) || DEFAULT_PORT; } catch { return DEFAULT_PORT; } }
 function savePort(p) { localStorage.setItem("maree.port", JSON.stringify(p)); }
+
+// ---- Jours & alertes (sélecteur de jour, risques météo)
+function ymdOf(date, tz) { return date.toLocaleDateString("sv-SE", { timeZone: tz || "Europe/Paris" }); }
+function todayYmd() { return ymdOf(new Date(), state.port.time_zone); }
+function ribbonYmds() { return [...new Set(state.tides.map((x) => x.ymd))].sort(); }
+function dayLabel(ymd) {
+  if (ymd === todayYmd()) return "Auj.";
+  if (ymd === ymdOf(new Date(Date.now() + 86400e3), state.port.time_zone)) return "Dem.";
+  return cap(new Date(ymd + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }).replace(".", ""));
+}
+function dayLabelLong(ymd) {
+  if (ymd === todayYmd()) return "aujourd'hui";
+  return new Date(ymd + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+}
+function riskForYmd(ymd) {
+  let level = 0, gale = false, text = null, force = 0;
+  const d = state.daily.find((x) => x.ymd === ymd);
+  if (d && d.riskLevel > 0) { level = Math.max(level, d.riskLevel); text = d.riskText; }
+  const a = state.avis.find((x) => x.ymd === ymd && x.niveau > 0);
+  if (a) { gale = true; force = a.force; level = Math.max(level, 2); text = text || a.phrase; }
+  return { level, gale, text, force };
+}
+function upcomingAlert() {
+  const ty = todayYmd();
+  for (const ymd of ribbonYmds()) {
+    if (ymd < ty) continue;
+    const r = riskForYmd(ymd);
+    if (r.level > 0) return { ymd, ...r };
+  }
+  return null;
+}
+function daySummary(ymd) {
+  const tz = state.port.time_zone;
+  const hs = state.hourly.filter((h) => ymdOf(h.date, tz) === ymd);
+  if (hs.length) {
+    const teaus = hs.map((h) => h.teau).filter((v) => v != null);
+    return {
+      windMax: Math.max(...hs.map((h) => h.windKmh || 0)),
+      gustMax: Math.max(...hs.map((h) => h.gustKmh || 0)),
+      swellMax: Math.max(...hs.map((h) => h.swellH || 0)),
+      teau: teaus.length ? Math.round(teaus.reduce((a, b) => a + b, 0) / teaus.length) : null,
+      dir: hs[Math.floor(hs.length / 2)].windDir,
+    };
+  }
+  const d = state.daily.find((x) => x.ymd === ymd);
+  return d ? { windMax: d.windKmh, gustMax: d.gustKmh, swellMax: d.waveH || 0, teau: null, dir: d.windDir } : null;
+}
+function dayStrip(ymd) {
+  const s = daySummary(ymd); if (!s) return "";
+  const p = [];
+  if (s.windMax != null) p.push(`💨 ${s.windMax}<small> km/h ${cardinal(s.dir)}</small>`);
+  if (s.gustMax) p.push(`🌬 <small>raf.</small> ${s.gustMax}`);
+  if (s.swellMax) p.push(`〰️ ${metres(s.swellMax)}<small> m</small>`);
+  if (s.teau != null) p.push(`🌊 ${s.teau}°`);
+  return `<div class="daystrip">${p.join('<span class="sep">·</span>')}</div>`;
+}
+function ribbonPill(ymd, sel) {
+  const r = riskForYmd(ymd);
+  const dot = r.gale ? `<span class="rk rk-red"></span>` : (r.level > 0 ? `<span class="rk rk-amber"></span>` : "");
+  return `<button class="pill-day ${ymd === sel ? "sel" : ""}" data-ymd="${ymd}">${dayLabel(ymd)}${dot}</button>`;
+}
+function alertBanner(al) {
+  const icon = al.gale ? "🌪" : "⚠︎";
+  const label = al.gale ? "Avis de coup de vent" : (al.text || "Risque météo");
+  const when = cap(dayLabelLong(al.ymd));
+  return `<div class="alert ${al.gale ? "alert-red" : "alert-amber"}"><span class="ai">${icon}</span>
+    <div><b>${label}</b><span>${when}${al.gale && al.force ? " · force " + al.force : ""}</span></div></div>`;
+}
+function wireRibbon() {
+  document.querySelectorAll(".pill-day").forEach((b) => {
+    b.onclick = () => {
+      state.selectedYmd = b.dataset.ymd;
+      renderAll(false);
+      const el = document.querySelector(".pill-day.sel");
+      if (el) el.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    };
+  });
+}
 
 // ---- Réseau
 async function apiSearch(q) {
@@ -242,7 +348,8 @@ async function apiTides(lat, lon) {
   const c = (await r.json()).contenu || {};
   const tides = [];
   for (const d of (c.marees || [])) for (const e of (d.etales || [])) {
-    tides.push({ date: new Date(e.datetime), hhmm: String(e.datetime).slice(11, 16), type: e.type_etale, hauteur: e.hauteur, coef: e.coef });
+    tides.push({ date: new Date(e.datetime), ymd: String(e.datetime).slice(0, 10),
+      hhmm: String(e.datetime).slice(11, 16), type: e.type_etale, hauteur: e.hauteur, coef: e.coef });
   }
   tides.sort((a, b) => a.date - b.date);
   const hourly = ((c.previs || {}).detail || []).map((h) => ({
@@ -252,8 +359,17 @@ async function apiTides(lat, lon) {
     waveH: h.hauteurvague, swellH: h.hauteurhoule, swellPer: h.periodehoule,
     pressure: h.pression, uv: h.uv, cloud: h.nuagecouverture,
   }));
+  const daily = ((c.previs || {}).simple || []).map((s) => ({
+    ymd: String(s.datetime).slice(0, 10),
+    windKmh: s.forcevkmh, gustKmh: s.rafvkmh, windDir: s.dirvdegres, waveH: s.hauteurvague,
+    riskLevel: (s.marinerisks && s.marinerisks.level) || 0,
+    riskText: (s.marinerisks && s.marinerisks.text) || null,
+  }));
+  const avis = (c.avis || []).map((a) => ({
+    ymd: String(a.datetime).slice(0, 10), niveau: a.niveau || 0, force: a.force_vent || 0, phrase: a.phrase || "",
+  }));
   const lieu = (c.marees && c.marees[0] && c.marees[0].lieu) || null;
-  return { tides, hourly, lieu };
+  return { tides, hourly, daily, avis, lieu };
 }
 function cleanLieu(s) { return String(s).split("©")[0].trim() || "Ma position"; }
 
@@ -262,8 +378,8 @@ function cacheKey() { return "maree.cache." + state.port.lat + "," + state.port.
 function saveCache() {
   try {
     localStorage.setItem(cacheKey(), JSON.stringify({
-      at: Date.now(), lieu: state.lieu,
-      tides: state.tides.map((x) => ({ t: +x.date, hhmm: x.hhmm, type: x.type, hauteur: x.hauteur, coef: x.coef })),
+      at: Date.now(), lieu: state.lieu, daily: state.daily, avis: state.avis,
+      tides: state.tides.map((x) => ({ t: +x.date, ymd: x.ymd, hhmm: x.hhmm, type: x.type, hauteur: x.hauteur, coef: x.coef })),
       hourly: state.hourly.map((h) => ({ ...h, date: +h.date })),
     }));
   } catch {}
@@ -271,8 +387,8 @@ function saveCache() {
 function loadCache() {
   try {
     const c = JSON.parse(localStorage.getItem(cacheKey())); if (!c) return null;
-    return { at: c.at, lieu: c.lieu,
-      tides: c.tides.map((x) => ({ date: new Date(x.t), hhmm: x.hhmm, type: x.type, hauteur: x.hauteur, coef: x.coef })),
+    return { at: c.at, lieu: c.lieu, daily: c.daily || [], avis: c.avis || [],
+      tides: c.tides.map((x) => ({ date: new Date(x.t), ymd: x.ymd, hhmm: x.hhmm, type: x.type, hauteur: x.hauteur, coef: x.coef })),
       hourly: (c.hourly || []).map((h) => ({ ...h, date: new Date(h.date) })) };
   } catch { return null; }
 }
@@ -386,14 +502,16 @@ function renderAll(animate) {
   waterRange = today.length ? { lo: Math.min(...today.map(x=>x.hauteur)), hi: Math.max(...today.map(x=>x.hauteur)) }
                             : { lo: Math.min(...t.map(x=>x.hauteur)), hi: Math.max(...t.map(x=>x.hauteur)) };
 
-  const groups = {};
-  for (const x of t) { const k = new Date(x.date); k.setHours(0,0,0,0); (groups[k.getTime()] ||= []).push(x); }
-  const keys = Object.keys(groups).map(Number).sort((a,b)=>a-b);
-  const upcoming = keys.slice(1, 6).map((k) => ({ day: new Date(k), tides: groups[k] }));
+  const ribbon = ribbonYmds();
+  if (!state.selectedYmd || !ribbon.includes(state.selectedYmd)) state.selectedYmd = ribbon.includes(todayYmd()) ? todayYmd() : ribbon[0];
+  const selYmd = state.selectedYmd;
+  const selTides = t.filter((x) => x.ymd === selYmd);
+  const al = upcomingAlert();
   const a = (i) => animate ? `enter" style="--d:${i*0.09}s` : "";
 
   $("#content").innerHTML = `
     ${state.stale ? `<div class="offline">⚠︎ Hors ligne — prévision du ${new Date(state.stale).toLocaleString("fr-FR",{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div>` : ""}
+    ${al ? alertBanner(al) : ""}
     <section class="card hero ${a(0)}">
       <div class="water" id="water" style="height:0">
         <div class="crest">
@@ -418,20 +536,23 @@ function renderAll(animate) {
         </div>` : ""}
     </section>
 
-    <section class="card ${a(1)}"><h2>Hauteur d'eau</h2><div id="chartHost">${chartSVG(now, t, animate)}<div id="scrubTip"></div></div></section>
+    ${weatherCard(a(1))}
 
-    ${weatherCard(a(2))}
+    ${activityCard(a(2))}
 
-    ${activityCard(a(3))}
+    <section class="card ${a(3)}">
+      <h2>Hauteur d'eau</h2>
+      <div class="ribbon" id="ribbon">${ribbon.map((y) => ribbonPill(y, selYmd)).join("")}</div>
+      <div id="chartHost">${chartSVG(selYmd, animate)}<div id="scrubTip"></div></div>
+      ${dayStrip(selYmd)}
+    </section>
 
-    <section class="card ${a(4)}"><h2>Aujourd'hui</h2>${today.map((x)=>rowHTML(x, now)).join("")}</section>
-
-    ${upcoming.length ? `<section class="card ${a(5)}"><h2>Jours suivants</h2>
-      ${upcoming.map((g)=>`<div class="daygroup"><div class="dayname">${cap(dayName(g.day))}</div>
-        ${g.tides.map((x)=>rowHTML(x, now)).join("")}</div>`).join("")}</section>` : ""}`;
+    <section class="card ${a(4)}"><h2>Marées — ${cap(dayLabelLong(selYmd))}</h2>
+      ${selTides.map((x) => rowHTML(x, now)).join("")}</section>`;
 
   tickLive(); // positionne niveau d'eau, barre, marqueur "maintenant"
   wireChart(); // active le scrub tactile sur la courbe
+  wireRibbon(); // active le sélecteur de jour
 }
 
 function renderSkeleton() {
@@ -533,9 +654,15 @@ function rowHTML(x, now) {
 }
 
 // ---- Courbe SVG
-function chartSVG(now, t, animate) {
+function chartSVG(ymd, animate) {
+  const t = state.tides;
+  const tz = state.port.time_zone || "Europe/Paris";
+  const dayT = t.filter((x) => x.ymd === ymd).sort((a, b) => a.date - b.date);
+  if (dayT.length < 1) return "";
   const W = 600, H = 210, padL = 4, padR = 4, padT = 26, padB = 24;
-  const start = new Date(now.getTime() - 3*3600e3), end = new Date(now.getTime() + 9*3600e3);
+  const start = new Date(dayT[0].date.getTime() - 3*3600e3), end = new Date(dayT[dayT.length-1].date.getTime() + 3*3600e3);
+  const now = new Date();
+  const isToday = ymd === todayYmd() && now >= start && now <= end;
   const pts = [];
   for (let ms = start.getTime(); ms <= end.getTime(); ms += 600e3) { const hv = heightNow(new Date(ms), t); if (hv != null) pts.push([ms, hv]); }
   if (pts.length < 2) return "";
@@ -574,18 +701,20 @@ function chartSVG(now, t, animate) {
   const d0 = new Date(start); d0.setMinutes(0,0,0);
   for (let ms = d0.getTime(); ms <= end.getTime(); ms += 3*3600e3) {
     if (ms < start.getTime()) continue;
-    const hh = new Date(ms).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+    const hh = new Date(ms).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",timeZone:tz});
     ticks.push(`<text x="${X(ms).toFixed(1)}" y="${H-6}" fill="rgba(255,255,255,.55)" font-size="10" text-anchor="middle">${hh}</text>`);
   }
+  const nowMk = isToday ? `
+    <line id="nowLine" x1="${nx.toFixed(1)}" y1="${padT-8}" x2="${nx.toFixed(1)}" y2="${H-padB}" stroke="rgba(255,255,255,.55)" stroke-width="1.4" stroke-dasharray="4 4"/>
+    <circle id="nowPulse" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="5" fill="#8fe3ff"/>
+    <circle id="nowDot" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="5" fill="#fff"/>` : "";
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
     <defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#66d9ff" stop-opacity=".55"/><stop offset="1" stop-color="#0a6ab0" stop-opacity="0"/></linearGradient></defs>
     ${nights}
     <path class="${areaCls}" d="${area}" fill="url(#fill)"/>
     <path class="${drawCls}" d="${line}" pathLength="1" fill="none" stroke="#8fe3ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-    <line id="nowLine" x1="${nx.toFixed(1)}" y1="${padT-8}" x2="${nx.toFixed(1)}" y2="${H-padB}" stroke="rgba(255,255,255,.55)" stroke-width="1.4" stroke-dasharray="4 4"/>
-    <circle id="nowPulse" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="5" fill="#8fe3ff"/>
-    <circle id="nowDot" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="5" fill="#fff"/>
+    ${nowMk}
     ${dots}${ticks.join("")}${sunMk}
     <line id="scrubLine" x1="0" y1="${(padT-8).toFixed(1)}" x2="0" y2="${(H-padB).toFixed(1)}" stroke="#fff" stroke-width="1.4" style="display:none"/>
     <circle id="scrubDot" cx="0" cy="0" r="5.5" fill="#fff" stroke="#0a6ab0" stroke-width="2" style="display:none"/></svg>`;
@@ -763,13 +892,13 @@ async function load() {
   if (first) renderSkeleton(); else $("#headSpin").innerHTML = '<div class="spinner"></div>';
   try {
     const res = await apiTides(state.port.lat, state.port.lon);
-    state.tides = res.tides; state.hourly = res.hourly; state.lieu = res.lieu; state.stale = null;
+    state.tides = res.tides; state.hourly = res.hourly; state.daily = res.daily; state.avis = res.avis; state.lieu = res.lieu; state.stale = null;
     if (!res.tides.length) state.error = "Aucune donnée de marée pour ce port.";
     else { if (state.port.geo && res.lieu) { state.port.nom = cleanLieu(res.lieu); savePort(state.port); } saveCache(); }
   } catch {
     const cached = loadCache();
     if (cached && cached.tides.length) {
-      state.tides = cached.tides; state.hourly = cached.hourly; state.lieu = cached.lieu; state.stale = cached.at;
+      state.tides = cached.tides; state.hourly = cached.hourly; state.daily = cached.daily; state.avis = cached.avis; state.lieu = cached.lieu; state.stale = cached.at;
     } else {
       state.error = "Impossible de charger les marées. Vérifie ta connexion.";
     }
