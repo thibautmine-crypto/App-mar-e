@@ -94,6 +94,14 @@
     padding: 6px 12px; font-size: 14px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
   .card h2 { font-size: 17px; font-weight: 700; margin: 0 0 12px; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .tile { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.08);
+    border-radius: 18px; padding: 12px 10px; text-align: center; }
+  .tile .ti { font-size: 20px; line-height: 1; }
+  .tile .tv { font-size: 22px; font-weight: 800; margin-top: 6px; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .tile .tv small { font-size: 12px; font-weight: 600; color: var(--faint); }
+  .tile .tl { font-size: 11px; color: var(--fainter); margin-top: 2px; }
+  @media (max-width: 360px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
   .row { display: flex; align-items: center; gap: 12px; padding: 7px 0; transition: opacity .4s; }
   .row .ic { width: 22px; height: 22px; flex: 0 0 22px; }
   .row .type { font-size: 15px; color: var(--faint); }
@@ -132,6 +140,12 @@
   .search-in { width: 100%; font-size: 17px; font-family: inherit; color: #fff;
     background: rgba(255,255,255,.12); border: 1px solid var(--stroke); border-radius: 14px; padding: 12px 14px; outline: none; }
   .search-in::placeholder { color: var(--fainter); }
+  .geo-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+    margin-top: 10px; padding: 12px; font-family: inherit; font-size: 15px; font-weight: 600; color: var(--high);
+    background: rgba(102,217,255,.12); border: 1px solid rgba(102,217,255,.22); border-radius: 14px; cursor: pointer; transition: transform .1s, background .15s; }
+  .geo-btn:active { transform: scale(.98); background: rgba(102,217,255,.2); }
+  .geo-btn svg { width: 18px; height: 18px; }
+  .copyright { text-align: center; color: rgba(255,255,255,.3); font-size: 12px; letter-spacing: .02em; padding: 22px 0 6px; }
   .result { display: flex; align-items: center; gap: 12px; padding: 14px 6px; width: 100%;
     background: none; border: 0; border-bottom: 1px solid rgba(255,255,255,.08); color: #fff;
     font-family: inherit; font-size: 16px; text-align: left; cursor: pointer; transition: background .15s; }
@@ -158,12 +172,17 @@
     <div id="headSpin"></div>
   </header>
   <main id="content"></main>
+  <footer class="copyright">© MineDigital</footer>
 </div>
 
 <div class="sheet-bg" id="sheetBg">
   <div class="sheet" id="sheet">
     <div class="grab"></div>
     <input class="search-in" id="searchIn" placeholder="Saint-Malo, Brest, La Rochelle…" autocomplete="off" />
+    <button class="geo-btn" id="geoBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+      Utiliser ma position
+    </button>
     <div id="results"></div>
   </div>
 </div>
@@ -173,7 +192,7 @@ const API_BASE = (window.MAREE_API_BASE ?? "/api");
 const DEFAULT_PORT = { id: 17, nom: "Saint-Malo", lat: 48.6539, lon: -2.01563, time_zone: "Europe/Paris" };
 const $ = (s) => document.querySelector(s);
 
-let state = { port: loadPort(), tides: [], loading: false, error: null };
+let state = { port: loadPort(), tides: [], hourly: [], lieu: null, loading: false, error: null };
 let chart = null;        // paramètres géométriques de la courbe (pour le tick live)
 let waterRange = null;   // {lo, hi} du jour, pour le niveau d'eau animé
 let lastNextTs = null;   // timestamp de la prochaine marée connue (détection de bascule)
@@ -190,13 +209,23 @@ async function apiSearch(q) {
 async function apiTides(lat, lon) {
   const r = await fetch(`${API_BASE}/tides?lat=${lat}&lon=${lon}`);
   if (!r.ok) throw new Error("http " + r.status);
-  const days = ((await r.json()).contenu || {}).marees || [];
-  const out = [];
-  for (const d of days) for (const e of (d.etales || [])) {
-    out.push({ date: new Date(e.datetime), hhmm: String(e.datetime).slice(11, 16), type: e.type_etale, hauteur: e.hauteur, coef: e.coef });
+  const c = (await r.json()).contenu || {};
+  const tides = [];
+  for (const d of (c.marees || [])) for (const e of (d.etales || [])) {
+    tides.push({ date: new Date(e.datetime), hhmm: String(e.datetime).slice(11, 16), type: e.type_etale, hauteur: e.hauteur, coef: e.coef });
   }
-  return out.sort((a, b) => a.date - b.date);
+  tides.sort((a, b) => a.date - b.date);
+  const hourly = ((c.previs || {}).detail || []).map((h) => ({
+    date: new Date(h.datetime),
+    teau: h.teau, tair: h.t, feels: h.temperessentie,
+    windKmh: h.forcevkmh, gustKmh: h.rafvkmh, windDir: h.dirvdegres,
+    waveH: h.hauteurvague, swellH: h.hauteurhoule, swellPer: h.periodehoule,
+    pressure: h.pression, uv: h.uv, cloud: h.nuagecouverture,
+  }));
+  const lieu = (c.marees && c.marees[0] && c.marees[0].lieu) || null;
+  return { tides, hourly, lieu };
 }
+function cleanLieu(s) { return String(s).split("©")[0].trim() || "Ma position"; }
 
 // ---- Calculs
 function surrounding(now, t) { let prev = null, next = null; for (const x of t) { if (x.date <= now) prev = x; else { next = x; break; } } return { prev, next }; }
@@ -237,6 +266,39 @@ function moonEmoji(date) {
   let frac = (((date - ref) / 86400000) % synodic) / synodic; if (frac < 0) frac += 1;
   return ["🌑","🌒","🌓","🌔","🌕","🌖","🌗","🌘"][Math.floor(frac * 8 + 0.5) % 8];
 }
+
+// Météo marine : entrée horaire la plus proche de maintenant
+function weatherNow() {
+  if (!state.hourly || !state.hourly.length) return null;
+  const now = Date.now();
+  return state.hourly.reduce((a, b) => Math.abs(b.date - now) < Math.abs(a.date - now) ? b : a);
+}
+// Rose des vents (direction d'où vient le vent)
+function cardinal(deg) {
+  if (deg == null) return "";
+  return ["N","NE","E","SE","S","SO","O","NO"][Math.round(deg / 45) % 8];
+}
+
+// Lever / coucher du soleil (algorithme SunCalc, précis à ~1 min)
+const SUN = (() => {
+  const rad = Math.PI/180, dayMs = 86400e3, J1970 = 2440588, J2000 = 2451545, e = rad*23.4397;
+  const toDays = (d) => d.valueOf()/dayMs - 0.5 + J1970 - J2000;
+  const fromJ = (j) => new Date((j + 0.5 - J1970) * dayMs);
+  const M = (d) => rad*(357.5291 + 0.98560028*d);
+  const L = (m) => m + rad*(1.9148*Math.sin(m) + 0.02*Math.sin(2*m) + 0.0003*Math.sin(3*m)) + rad*102.9372 + Math.PI;
+  const dec = (l) => Math.asin(Math.sin(e)*Math.sin(l));
+  const J0 = 0.0009;
+  const transitJ = (ds, m, l) => J2000 + ds + 0.0053*Math.sin(m) - 0.0069*Math.sin(2*l);
+  return (date, lat, lng) => {
+    const lw = rad*-lng, phi = rad*lat, d = toDays(date);
+    const n = Math.round(d - J0 + lw/(2*Math.PI));
+    const ds = J0 - lw/(2*Math.PI) + n;
+    const m = M(ds), l = L(m), de = dec(l), Jnoon = transitJ(ds, m, l);
+    const w = Math.acos((Math.sin(rad*-0.833) - Math.sin(phi)*Math.sin(de)) / (Math.cos(phi)*Math.cos(de)));
+    const Jset = transitJ(J0 + (w - lw)/(2*Math.PI) + n, m, l);
+    return { sunrise: fromJ(Jnoon - (Jset - Jnoon)), sunset: fromJ(Jset) };
+  };
+})();
 
 // ---- Icônes
 function arrow(up, cls) {
@@ -307,9 +369,11 @@ function renderAll(animate) {
 
     <section class="card ${a(1)}"><h2>Hauteur d'eau</h2><div id="chartHost">${chartSVG(now, t, animate)}</div></section>
 
-    <section class="card ${a(2)}"><h2>Aujourd'hui</h2>${today.map((x)=>rowHTML(x, now)).join("")}</section>
+    ${weatherCard(a(2))}
 
-    ${upcoming.length ? `<section class="card ${a(3)}"><h2>Jours suivants</h2>
+    <section class="card ${a(3)}"><h2>Aujourd'hui</h2>${today.map((x)=>rowHTML(x, now)).join("")}</section>
+
+    ${upcoming.length ? `<section class="card ${a(4)}"><h2>Jours suivants</h2>
       ${upcoming.map((g)=>`<div class="daygroup"><div class="dayname">${cap(dayName(g.day))}</div>
         ${g.tides.map((x)=>rowHTML(x, now)).join("")}</div>`).join("")}</section>` : ""}`;
 
@@ -321,6 +385,31 @@ function renderSkeleton() {
     <section class="card"><div class="sk" style="height:150px"></div></section>
     <section class="card"><div class="sk" style="height:200px"></div></section>
     <section class="card"><div class="sk" style="height:150px"></div></section>`;
+}
+
+// ---- Carte météo marine
+function tile(icon, val, unit, label) {
+  if (val == null || val === "") return "";
+  return `<div class="tile"><div class="ti">${icon}</div>
+    <div class="tv">${val}<small>${unit||""}</small></div><div class="tl">${label}</div></div>`;
+}
+function weatherCard(cls) {
+  const w = weatherNow();
+  if (!w) return "";
+  const wind = w.windKmh != null
+    ? `${w.windKmh}<small> km/h ${cardinal(w.windDir)}</small>` : null;
+  const gust = w.gustKmh != null ? `raf. ${w.gustKmh} km/h` : "";
+  const swell = (w.swellH != null)
+    ? `${metres(w.swellH)}<small> m${w.swellPer ? " · " + w.swellPer + " s" : ""}</small>` : null;
+  const tiles = [
+    tile("🌊", w.teau != null ? w.teau : null, "°", "Eau"),
+    tile("💨", wind, "", "Vent" + (gust ? " · " + gust : "")),
+    tile("〰️", swell, "", "Houle"),
+    tile("🌡️", w.tair != null ? w.tair : null, "°", "Air" + (w.feels != null ? " · ress. " + w.feels + "°" : "")),
+    tile("🧭", w.pressure != null ? w.pressure : null, " hPa", "Pression"),
+    tile("☀️", w.uv != null ? w.uv : null, "", "Indice UV"),
+  ].join("");
+  return `<section class="card ${cls}"><h2>Météo marine</h2><div class="tiles">${tiles}</div></section>`;
 }
 
 function rowHTML(x, now) {
@@ -347,6 +436,20 @@ function chartSVG(now, t, animate) {
   const Y = (h) => padT + (1 - (h - lo)/(hi - lo)) * (H - padT - padB);
   chart = { startMs: start.getTime(), endMs: end.getTime(), lo, hi, W, H, padL, padR, padT, padB };
 
+  // Ombrage jour/nuit + repères lever/coucher du soleil
+  let nights = "", sunMk = "", dayMs = 86400e3, top = padT - 8, hgt = H - padB - top;
+  for (let t0 = start.getTime() - dayMs; t0 <= end.getTime() + dayMs; t0 += dayMs) {
+    const s1 = SUN(new Date(t0), state.port.lat, state.port.lon);
+    const s2 = SUN(new Date(t0 + dayMs), state.port.lat, state.port.lon);
+    const a0 = Math.max(s1.sunset.getTime(), start.getTime()), b0 = Math.min(s2.sunrise.getTime(), end.getTime());
+    if (b0 > a0) nights += `<rect x="${X(a0).toFixed(1)}" y="${top}" width="${(X(b0)-X(a0)).toFixed(1)}" height="${hgt.toFixed(1)}" fill="rgba(2,8,26,.28)"/>`;
+    for (const [d, gl] of [[s1.sunrise, "☀"], [s1.sunset, "🌙"]]) {
+      const ms = d.getTime();
+      if (ms >= start.getTime() && ms <= end.getTime())
+        sunMk += `<text x="${X(ms).toFixed(1)}" y="${(padT-11).toFixed(1)}" font-size="11" text-anchor="middle">${gl}</text>`;
+    }
+  }
+
   const line = pts.map((p,i)=>`${i?'L':'M'}${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join(" ");
   const area = `${line} L${X(pts[pts.length-1][0]).toFixed(1)} ${H-padB} L${X(pts[0][0]).toFixed(1)} ${H-padB} Z`;
   const nx = X(now.getTime()), ny = Y(heightNow(now, t) ?? lo);
@@ -367,12 +470,13 @@ function chartSVG(now, t, animate) {
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
     <defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#66d9ff" stop-opacity=".55"/><stop offset="1" stop-color="#0a6ab0" stop-opacity="0"/></linearGradient></defs>
+    ${nights}
     <path class="${areaCls}" d="${area}" fill="url(#fill)"/>
     <path class="${drawCls}" d="${line}" pathLength="1" fill="none" stroke="#8fe3ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
     <line id="nowLine" x1="${nx.toFixed(1)}" y1="${padT-8}" x2="${nx.toFixed(1)}" y2="${H-padB}" stroke="rgba(255,255,255,.55)" stroke-width="1.4" stroke-dasharray="4 4"/>
     <circle id="nowPulse" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="5" fill="#8fe3ff"/>
     <circle id="nowDot" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="5" fill="#fff"/>
-    ${dots}${ticks.join("")}</svg>`;
+    ${dots}${ticks.join("")}${sunMk}</svg>`;
 }
 
 // ---- Tick live (chaque seconde) : compte à rebours, niveau d'eau, marqueur
@@ -424,9 +528,10 @@ async function load() {
   state.loading = true; state.error = null;
   if (first) renderSkeleton(); else $("#headSpin").innerHTML = '<div class="spinner"></div>';
   try {
-    const fresh = await apiTides(state.port.lat, state.port.lon);
-    state.tides = fresh;
-    if (!fresh.length) state.error = "Aucune donnée de marée pour ce port.";
+    const res = await apiTides(state.port.lat, state.port.lon);
+    state.tides = res.tides; state.hourly = res.hourly; state.lieu = res.lieu;
+    if (!res.tides.length) state.error = "Aucune donnée de marée pour ce port.";
+    else if (state.port.geo && res.lieu) { state.port.nom = cleanLieu(res.lieu); savePort(state.port); }
   } catch { state.error = "Impossible de charger les marées. Vérifie ta connexion."; }
   state.loading = false; $("#headSpin").innerHTML = "";
   renderAll(true);
@@ -437,6 +542,23 @@ let searchTimer = null;
 $("#portBtn").onclick = () => { $("#sheetBg").classList.add("open"); setTimeout(()=>$("#searchIn").focus(), 50); };
 $("#sheetBg").onclick = (e) => { if (e.target === $("#sheetBg")) close(); };
 function close() { $("#sheetBg").classList.remove("open"); }
+
+const geoBtn = $("#geoBtn");
+function resetGeoBtn() { geoBtn.innerHTML = geoBtnLabel; }
+const geoBtnLabel = geoBtn.innerHTML;
+geoBtn.onclick = () => {
+  if (!navigator.geolocation) { geoBtn.textContent = "Géolocalisation non disponible"; return; }
+  geoBtn.textContent = "Localisation…";
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      state.port = { nom: "Ma position", lat: +pos.coords.latitude.toFixed(4), lon: +pos.coords.longitude.toFixed(4), geo: true };
+      savePort(state.port); resetGeoBtn(); close();
+      state.tides = []; state.hourly = []; load();
+    },
+    () => { geoBtn.textContent = "Position indisponible"; setTimeout(resetGeoBtn, 2200); },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+  );
+};
 $("#searchIn").oninput = (e) => {
   clearTimeout(searchTimer);
   const q = e.target.value.trim();
