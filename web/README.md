@@ -9,6 +9,22 @@ Données : **Météo Consult Marine** (source SHOM), sans clé API.
 > **Cloudflare Worker gratuit** qui sert l'app **et** relaie l'API sur le même
 > domaine → aucun problème de CORS, aucun serveur à gérer.
 
+## ⚡️ Déploiement en un clic
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/thibautmine-crypto/App-mar-e)
+
+Ce bouton clone le dépôt sur ton compte, le connecte à Cloudflare et déploie
+`worker.js` automatiquement (grâce à `wrangler.toml` à la racine). À chaque
+`git push`, Cloudflare redéploie tout seul → les deux systèmes sont interfacés.
+
+## 🔗 Connexion manuelle GitHub → Cloudflare (CI/CD)
+
+1. Dashboard Cloudflare → **Workers & Pages** → **Create** → onglet **Connect to Git**.
+2. Choisis ce dépôt et la branche.
+3. Laisse la commande de déploiement par défaut : `npx wrangler deploy`
+   (la config `wrangler.toml` fait le reste).
+4. **Save and Deploy**. Chaque push sur la branche redéploie automatiquement.
+
 ## 🚀 Déploiement (Cloudflare Worker, gratuit)
 
 1. Crée un compte sur <https://dash.cloudflare.com> (gratuit).
