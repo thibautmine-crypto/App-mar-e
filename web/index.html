@@ -20,8 +20,8 @@
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html { margin: 0; background: var(--bottom); }
-  body { margin: 0; }
   body {
+    margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
     color: var(--txt);
     background: linear-gradient(180deg, var(--top), var(--bottom) 70%, var(--bottom));
@@ -29,6 +29,7 @@
     padding: max(16px, env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
     -webkit-font-smoothing: antialiased;
   }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
   .wrap { max-width: 640px; margin: 0 auto; }
 
   header { display: flex; align-items: center; justify-content: space-between; margin: 4px 4px 18px; }
@@ -36,29 +37,53 @@
   .port-btn {
     display: inline-flex; align-items: center; gap: 6px; margin-top: 4px;
     background: none; border: 0; color: var(--faint); font-size: 15px; font-weight: 500;
-    font-family: inherit; padding: 0; cursor: pointer;
+    font-family: inherit; padding: 4px 0; cursor: pointer; transition: opacity .2s, transform .1s;
   }
+  .port-btn:active { transform: scale(.96); opacity: .7; }
   .port-btn svg { width: 15px; height: 15px; }
   .spinner { width: 22px; height: 22px; border: 2.5px solid rgba(255,255,255,.25);
     border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   .card {
+    position: relative; overflow: hidden;
     background: var(--card); border: 1px solid var(--stroke);
     border-radius: 28px; padding: 20px; margin-bottom: 16px;
     backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
     box-shadow: 0 14px 40px rgba(0,0,0,.18);
   }
-  .hero { background: linear-gradient(160deg, rgba(102,217,255,.30), rgba(10,106,176,.35)); }
+  .card > * { position: relative; z-index: 1; }
+  .hero { background: linear-gradient(160deg, rgba(102,217,255,.24), rgba(10,106,176,.30)); }
+
+  /* Entrée animée (staggered) */
+  .enter { opacity: 0; animation: riseIn .7s cubic-bezier(.2,.7,.2,1) forwards; animation-delay: var(--d, 0s); }
+  @keyframes riseIn { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: none; } }
+
+  /* Eau vivante dans la carte héro */
+  .water { position: absolute; left: 0; right: 0; bottom: 0; height: 0;
+    background: linear-gradient(180deg, rgba(102,217,255,.30), rgba(10,106,176,.32));
+    transition: height 1.6s cubic-bezier(.3,.8,.3,1); z-index: 0; pointer-events: none; }
+  .crest { position: absolute; top: -13px; left: 0; width: 200%; height: 16px; }
+  .crest svg { position: absolute; top: 0; left: 0; width: 50%; height: 100%; }
+  .crest .w1 { fill: rgba(102,217,255,.32); animation: waveX 8s linear infinite; }
+  .crest .w2 { fill: rgba(143,227,255,.20); animation: waveX 13s linear infinite reverse; opacity: .8; }
+  @keyframes waveX { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
   .trend { font-size: 15px; font-weight: 600; color: var(--faint); display: flex; align-items: center; gap: 6px; }
+  .trend .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--high); box-shadow: 0 0 0 0 rgba(102,217,255,.6); animation: ping 2s ease-out infinite; }
+  @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(102,217,255,.55); } 70%,100% { box-shadow: 0 0 0 9px rgba(102,217,255,0); } }
   .now-row { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 10px; }
-  .height { font-size: 64px; font-weight: 800; letter-spacing: -.03em; line-height: 1;
-    font-variant-numeric: tabular-nums; }
+  .height { font-size: 64px; font-weight: 800; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
   .height small { font-size: 24px; font-weight: 600; color: var(--faint); }
-  .coef { text-align: center; }
-  .coef b { display: block; font-size: 30px; font-weight: 800; }
-  .coef span { font-size: 12px; color: var(--faint); }
+  .coef { text-align: center; min-width: 78px; }
+  .coef b { display: block; font-size: 30px; font-weight: 800; line-height: 1; }
+  .coef .moon { font-size: 18px; }
+  .coef span { font-size: 11px; color: var(--faint); display: block; margin-top: 2px; }
+
+  .progress { height: 5px; border-radius: 3px; background: rgba(255,255,255,.16); overflow: hidden; margin: 16px 0 4px; }
+  .progress i { display: block; height: 100%; border-radius: 3px; width: 0;
+    background: linear-gradient(90deg, var(--low), var(--high)); transition: width 1s linear; }
+  .prog-lbl { display: flex; justify-content: space-between; font-size: 11px; color: var(--fainter); }
 
   .divider { height: 1px; background: rgba(255,255,255,.18); margin: 16px 0; }
   .next { display: flex; align-items: center; gap: 12px; }
@@ -66,37 +91,51 @@
   .next .lbl { font-size: 13px; color: var(--faint); }
   .next .val { font-size: 17px; font-weight: 700; }
   .pill { margin-left: auto; background: rgba(255,255,255,.18); border-radius: 999px;
-    padding: 6px 12px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+    padding: 6px 12px; font-size: 14px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
   .card h2 { font-size: 17px; font-weight: 700; margin: 0 0 12px; }
-  .row { display: flex; align-items: center; gap: 12px; padding: 7px 0; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 7px 0; transition: opacity .4s; }
   .row .ic { width: 22px; height: 22px; flex: 0 0 22px; }
   .row .type { font-size: 15px; color: var(--faint); }
   .row .rcoef { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--faint);
     background: rgba(255,255,255,.12); border-radius: 999px; padding: 3px 8px; }
   .row .h { width: 66px; text-align: right; font-size: 15px; color: var(--faint); font-variant-numeric: tabular-nums; }
   .row .t { width: 52px; text-align: right; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .row.past { opacity: .45; }
+  .row.past { opacity: .4; }
+  .row.nextup { background: rgba(102,217,255,.10); border-radius: 12px; margin: 0 -8px; padding: 7px 8px; }
   .daygroup + .daygroup { border-top: 1px solid rgba(255,255,255,.12); margin-top: 8px; padding-top: 8px; }
   .dayname { font-size: 14px; font-weight: 600; color: var(--faint); margin: 4px 0; }
 
-  svg.chart { width: 100%; height: 200px; display: block; }
+  svg.chart { width: 100%; height: 210px; display: block; }
+  .draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.6s cubic-bezier(.4,0,.2,1) forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .fadein { opacity: 0; animation: fadeArea 1.2s .5s forwards; }
+  @keyframes fadeArea { to { opacity: 1; } }
+  #nowPulse { animation: nowPulse 2.2s ease-out infinite; transform-origin: center; transform-box: fill-box; }
+  @keyframes nowPulse { 0% { r: 5; opacity: .55; } 70%,100% { r: 15; opacity: 0; } }
 
-  /* Feuille de recherche */
+  /* Skeleton de chargement */
+  .sk { background: rgba(255,255,255,.08); border-radius: 12px; overflow: hidden; position: relative; }
+  .sk::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent); animation: shimmer 1.4s infinite; }
+  @keyframes shimmer { 100% { transform: translateX(100%); } }
+
   .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.4); backdrop-filter: blur(6px);
     display: none; align-items: flex-end; z-index: 20; }
-  .sheet-bg.open { display: flex; }
+  .sheet-bg.open { display: flex; animation: bgFade .25s ease; }
+  @keyframes bgFade { from { opacity: 0; } to { opacity: 1; } }
   .sheet { background: #0b3358; width: 100%; max-height: 82dvh; border-radius: 24px 24px 0 0;
     padding: 14px 16px calc(20px + env(safe-area-inset-bottom)); overflow-y: auto;
-    box-shadow: 0 -10px 40px rgba(0,0,0,.4); }
+    box-shadow: 0 -10px 40px rgba(0,0,0,.4); animation: sheetUp .32s cubic-bezier(.2,.8,.2,1); }
+  @keyframes sheetUp { from { transform: translateY(100%); } to { transform: none; } }
   .sheet .grab { width: 40px; height: 5px; background: rgba(255,255,255,.3); border-radius: 3px; margin: 4px auto 12px; }
   .search-in { width: 100%; font-size: 17px; font-family: inherit; color: #fff;
-    background: rgba(255,255,255,.12); border: 1px solid var(--stroke); border-radius: 14px;
-    padding: 12px 14px; outline: none; }
+    background: rgba(255,255,255,.12); border: 1px solid var(--stroke); border-radius: 14px; padding: 12px 14px; outline: none; }
   .search-in::placeholder { color: var(--fainter); }
   .result { display: flex; align-items: center; gap: 12px; padding: 14px 6px; width: 100%;
     background: none; border: 0; border-bottom: 1px solid rgba(255,255,255,.08); color: #fff;
-    font-family: inherit; font-size: 16px; text-align: left; cursor: pointer; }
+    font-family: inherit; font-size: 16px; text-align: left; cursor: pointer; transition: background .15s; }
+  .result:active { background: rgba(255,255,255,.08); }
   .result small { display: block; color: var(--faint); font-size: 12px; }
 
   .state { text-align: center; color: var(--faint); padding: 60px 20px; }
@@ -118,7 +157,7 @@
     </div>
     <div id="headSpin"></div>
   </header>
-  <main id="content"><div class="state"><div class="spinner" style="margin:0 auto"></div></div></main>
+  <main id="content"></main>
 </div>
 
 <div class="sheet-bg" id="sheetBg">
@@ -130,53 +169,39 @@
 </div>
 
 <script>
-// Base de l'API. Sous le Cloudflare Worker, tout est same-origin → "/api".
 const API_BASE = (window.MAREE_API_BASE ?? "/api");
 const DEFAULT_PORT = { id: 17, nom: "Saint-Malo", lat: 48.6539, lon: -2.01563, time_zone: "Europe/Paris" };
-
 const $ = (s) => document.querySelector(s);
-let state = { port: loadPort(), tides: [], loading: false, error: null };
-let tick = null;
 
-function loadPort() {
-  try { return JSON.parse(localStorage.getItem("maree.port")) || DEFAULT_PORT; }
-  catch { return DEFAULT_PORT; }
-}
+let state = { port: loadPort(), tides: [], loading: false, error: null };
+let chart = null;        // paramètres géométriques de la courbe (pour le tick live)
+let waterRange = null;   // {lo, hi} du jour, pour le niveau d'eau animé
+let lastNextTs = null;   // timestamp de la prochaine marée connue (détection de bascule)
+
+function loadPort() { try { return JSON.parse(localStorage.getItem("maree.port")) || DEFAULT_PORT; } catch { return DEFAULT_PORT; } }
 function savePort(p) { localStorage.setItem("maree.port", JSON.stringify(p)); }
 
 // ---- Réseau
 async function apiSearch(q) {
   const r = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q)}`);
   if (!r.ok) throw new Error("http " + r.status);
-  const j = await r.json();
-  return (j.contenu || []).filter((p) => p.presence_maree !== false);
+  return ((await r.json()).contenu || []).filter((p) => p.presence_maree !== false);
 }
 async function apiTides(lat, lon) {
   const r = await fetch(`${API_BASE}/tides?lat=${lat}&lon=${lon}`);
   if (!r.ok) throw new Error("http " + r.status);
-  const j = await r.json();
-  const days = (j.contenu && j.contenu.marees) || [];
+  const days = ((await r.json()).contenu || {}).marees || [];
   const out = [];
   for (const d of days) for (const e of (d.etales || [])) {
-    out.push({
-      date: new Date(e.datetime),
-      hhmm: String(e.datetime).slice(11, 16),
-      type: e.type_etale, hauteur: e.hauteur, coef: e.coef,
-    });
+    out.push({ date: new Date(e.datetime), hhmm: String(e.datetime).slice(11, 16), type: e.type_etale, hauteur: e.hauteur, coef: e.coef });
   }
-  out.sort((a, b) => a.date - b.date);
-  return out;
+  return out.sort((a, b) => a.date - b.date);
 }
 
 // ---- Calculs
-function surrounding(now, t) {
-  let prev = null, next = null;
-  for (const x of t) { if (x.date <= now) prev = x; else { next = x; break; } }
-  return { prev, next };
-}
+function surrounding(now, t) { let prev = null, next = null; for (const x of t) { if (x.date <= now) prev = x; else { next = x; break; } } return { prev, next }; }
 function heightNow(now, t) {
-  const { prev, next } = surrounding(now, t);
-  if (!prev || !next) return null;
+  const { prev, next } = surrounding(now, t); if (!prev || !next) return null;
   const span = next.date - prev.date; if (span <= 0) return prev.hauteur;
   const k = (now - prev.date) / span;
   return prev.hauteur + (next.hauteur - prev.hauteur) * (1 - Math.cos(Math.PI * k)) / 2;
@@ -191,113 +216,147 @@ function coefNow(now, t) {
 }
 const isHigh = (x) => x.type === "PM";
 const metres = (h) => h == null ? "—" : h.toFixed(2).replace(".", ",");
-function dur(ms) { const s = Math.max(0, ms/1000|0), h = s/3600|0, m = (s%3600)/60|0;
-  return h ? `${h} h ${String(m).padStart(2,"0")}` : `${m} min`; }
+function dur(ms) { const s = Math.max(0, ms/1000|0), h = s/3600|0, m = (s%3600)/60|0, sec = s%60;
+  return h ? `${h} h ${String(m).padStart(2,"0")}` : m ? `${m} min ${String(sec).padStart(2,"0")}` : `${sec} s`; }
 function sameDay(a, b) { return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
 function dayName(d) { return d.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"short" }); }
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-// ---- Icônes (SVG inline)
+// Régime de marée d'après le coefficient (conventions FR)
+function regime(coef) {
+  if (coef == null) return "";
+  if (coef >= 100) return "Grandes marées";
+  if (coef >= 95) return "Vives-eaux";
+  if (coef >= 70) return "Vives-eaux";
+  if (coef >= 45) return "Marées moyennes";
+  return "Mortes-eaux";
+}
+// Phase de lune approximée → emoji (les grandes marées coïncident avec pleine/nouvelle lune)
+function moonEmoji(date) {
+  const synodic = 29.530588853, ref = Date.UTC(2000, 0, 6, 18, 14);
+  let frac = (((date - ref) / 86400000) % synodic) / synodic; if (frac < 0) frac += 1;
+  return ["🌑","🌒","🌓","🌔","🌕","🌖","🌗","🌘"][Math.floor(frac * 8 + 0.5) % 8];
+}
+
+// ---- Icônes
 function arrow(up, cls) {
   const c = up ? "var(--high)" : "var(--low)";
   const path = up ? "M12 19V5M6 11l6-6 6 6" : "M12 5v14M6 13l6 6 6-6";
   return `<svg class="${cls||''}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>`;
 }
 
-// ---- Rendu
-function render() {
+// ---- Vague (chemin sinusoïdal seamless, 2 longueurs d'onde sur 240)
+function wavePath(w = 240, h = 16, amp = 3.2) {
+  const base = amp + 1; let d = `M0 ${h}`;
+  for (let x = 0; x <= w; x += 4) { const y = base + amp * Math.sin((x / 120) * 2 * Math.PI); d += ` L${x} ${y.toFixed(2)}`; }
+  return d + ` L${w} ${h} L0 ${h} Z`;
+}
+
+// ---- Rendu structurel (au chargement / changement de port)
+function renderAll(animate) {
   const now = new Date();
   $("#portName").textContent = state.port.nom;
-  $("#headSpin").innerHTML = state.loading && state.tides.length ? '<div class="spinner"></div>' : "";
+  $("#headSpin").innerHTML = "";
 
   if (state.error && !state.tides.length) {
     $("#content").innerHTML = `<div class="state">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><line x1="12" y1="20" x2="12" y2="20"/><line x1="3" y1="3" x2="21" y2="21"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><line x1="3" y1="3" x2="21" y2="21"/></svg>
       <div>${state.error}</div><button class="btn" onclick="load()">Réessayer</button></div>`;
     return;
   }
-  if (!state.tides.length) {
-    $("#content").innerHTML = '<div class="state"><div class="spinner" style="margin:0 auto"></div></div>';
-    return;
-  }
-
   const t = state.tides;
+  if (!t.length) { renderSkeleton(); return; }
+
   const { next } = surrounding(now, t);
-  const h = heightNow(now, t);
+  lastNextTs = next ? +next.date : null;
   const coef = coefNow(now, t);
   const today = t.filter((x) => sameDay(x.date, now));
+  waterRange = today.length ? { lo: Math.min(...today.map(x=>x.hauteur)), hi: Math.max(...today.map(x=>x.hauteur)) }
+                            : { lo: Math.min(...t.map(x=>x.hauteur)), hi: Math.max(...t.map(x=>x.hauteur)) };
 
-  // Jours suivants (groupés)
   const groups = {};
-  for (const x of t) { const k = new Date(x.date); k.setHours(0,0,0,0);
-    (groups[k.getTime()] ||= []).push(x); }
+  for (const x of t) { const k = new Date(x.date); k.setHours(0,0,0,0); (groups[k.getTime()] ||= []).push(x); }
   const keys = Object.keys(groups).map(Number).sort((a,b)=>a-b);
   const upcoming = keys.slice(1, 6).map((k) => ({ day: new Date(k), tides: groups[k] }));
+  const a = (i) => animate ? `enter" style="--d:${i*0.09}s` : "";
 
   $("#content").innerHTML = `
-    <section class="card hero">
-      ${next ? `<div class="trend">${isHigh(next)?'▲ Marée montante':'▼ Marée descendante'}</div>` : ""}
+    <section class="card hero ${a(0)}">
+      <div class="water" id="water" style="height:0">
+        <div class="crest">
+          <svg class="w1" viewBox="0 0 240 16" preserveAspectRatio="none"><path d="${wavePath()}"/></svg>
+          <svg class="w2" viewBox="0 0 240 16" preserveAspectRatio="none"><path d="${wavePath(240,16,2.4)}"/></svg>
+        </div>
+      </div>
+      ${next ? `<div class="trend" id="trend"><span class="dot"></span><span id="trendTxt">${isHigh(next)?'Marée montante':'Marée descendante'}</span></div>` : ""}
       <div class="now-row">
-        <div class="height">${metres(h)}<small> m</small></div>
-        ${coef!=null ? `<div class="coef"><b>${coef}</b><span>coef.</span></div>` : ""}
+        <div class="height"><span id="heightVal">${metres(heightNow(now,t))}</span><small> m</small></div>
+        ${coef!=null ? `<div class="coef"><b>${coef}</b><span class="moon">${moonEmoji(now)}</span><span>${regime(coef)}</span></div>` : ""}
       </div>
       ${next ? `
+        <div class="progress"><i id="progBar"></i></div>
+        <div class="prog-lbl"><span id="progFrom"></span><span id="progTo"></span></div>
         <div class="divider"></div>
         <div class="next">
           ${arrow(isHigh(next),'ic')}
           <div><div class="lbl">Prochaine ${isHigh(next)?'pleine mer':'basse mer'}</div>
           <div class="val">${next.hhmm} · ${metres(next.hauteur)} m</div></div>
-          <div class="pill">dans ${dur(next.date - now)}</div>
+          <div class="pill" id="countdown">dans ${dur(next.date - now)}</div>
         </div>` : ""}
     </section>
 
-    <section class="card"><h2>Hauteur d'eau</h2>${chartSVG(now, t)}</section>
+    <section class="card ${a(1)}"><h2>Hauteur d'eau</h2><div id="chartHost">${chartSVG(now, t, animate)}</div></section>
 
-    <section class="card"><h2>Aujourd'hui</h2>${today.map((x)=>rowHTML(x, now)).join("")}</section>
+    <section class="card ${a(2)}"><h2>Aujourd'hui</h2>${today.map((x)=>rowHTML(x, now)).join("")}</section>
 
-    ${upcoming.length ? `<section class="card"><h2>Jours suivants</h2>
+    ${upcoming.length ? `<section class="card ${a(3)}"><h2>Jours suivants</h2>
       ${upcoming.map((g)=>`<div class="daygroup"><div class="dayname">${cap(dayName(g.day))}</div>
-        ${g.tides.map((x)=>rowHTML(x, now)).join("")}</div>`).join("")}
-    </section>` : ""}`;
+        ${g.tides.map((x)=>rowHTML(x, now)).join("")}</div>`).join("")}</section>` : ""}`;
+
+  tickLive(); // positionne niveau d'eau, barre, marqueur "maintenant"
+}
+
+function renderSkeleton() {
+  $("#content").innerHTML = `
+    <section class="card"><div class="sk" style="height:150px"></div></section>
+    <section class="card"><div class="sk" style="height:200px"></div></section>
+    <section class="card"><div class="sk" style="height:150px"></div></section>`;
 }
 
 function rowHTML(x, now) {
-  return `<div class="row ${x.date<now?'past':''}">
+  const nextup = lastNextTs && +x.date === lastNextTs;
+  return `<div class="row ${x.date<now?'past':''} ${nextup?'nextup':''}">
     ${arrow(isHigh(x),'ic')}
     <span class="type">${isHigh(x)?'Pleine mer':'Basse mer'}</span>
     ${x.coef!=null?`<span class="rcoef">${x.coef}</span>`:''}
     <span class="h">${metres(x.hauteur)} m</span>
     <span class="t">${x.hhmm}</span></div>`;
 }
-const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-// ---- Courbe SVG (fenêtre -3h → +9h)
-function chartSVG(now, t) {
-  const W = 600, H = 200, padL = 4, padR = 4, padT = 24, padB = 22;
+// ---- Courbe SVG
+function chartSVG(now, t, animate) {
+  const W = 600, H = 210, padL = 4, padR = 4, padT = 26, padB = 24;
   const start = new Date(now.getTime() - 3*3600e3), end = new Date(now.getTime() + 9*3600e3);
   const pts = [];
-  for (let ms = start.getTime(); ms <= end.getTime(); ms += 600e3) {
-    const hv = heightNow(new Date(ms), t); if (hv != null) pts.push([ms, hv]);
-  }
+  for (let ms = start.getTime(); ms <= end.getTime(); ms += 600e3) { const hv = heightNow(new Date(ms), t); if (hv != null) pts.push([ms, hv]); }
   if (pts.length < 2) return "";
   const inWin = t.filter((x) => x.date >= start && x.date <= end);
   const hs = pts.map((p)=>p[1]).concat(inWin.map((x)=>x.hauteur));
   let lo = Math.min(...hs), hi = Math.max(...hs); const pad = (hi-lo)*0.15 || 1; lo -= pad; hi += pad;
   const X = (ms) => padL + (ms - start) / (end - start) * (W - padL - padR);
   const Y = (h) => padT + (1 - (h - lo)/(hi - lo)) * (H - padT - padB);
+  chart = { startMs: start.getTime(), endMs: end.getTime(), lo, hi, W, H, padL, padR, padT, padB };
 
   const line = pts.map((p,i)=>`${i?'L':'M'}${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join(" ");
   const area = `${line} L${X(pts[pts.length-1][0]).toFixed(1)} ${H-padB} L${X(pts[0][0]).toFixed(1)} ${H-padB} Z`;
   const nx = X(now.getTime()), ny = Y(heightNow(now, t) ?? lo);
+  const drawCls = animate ? "draw" : "", areaCls = animate ? "fadein" : "";
 
   const dots = inWin.map((x)=>{
-    const cx = X(x.date.getTime()), cy = Y(x.hauteur);
-    const above = isHigh(x);
+    const cx = X(x.date.getTime()), cy = Y(x.hauteur), above = isHigh(x);
     return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.2" fill="#fff"/>
-      <text x="${cx.toFixed(1)}" y="${(above?cy-8:cy+16).toFixed(1)}" fill="rgba(255,255,255,.85)"
-        font-size="11" font-weight="600" text-anchor="middle">${x.hhmm}</text>`;
+      <text x="${cx.toFixed(1)}" y="${(above?cy-8:cy+16).toFixed(1)}" fill="rgba(255,255,255,.9)" font-size="11" font-weight="700" text-anchor="middle">${x.hhmm}</text>`;
   }).join("");
-
-  // Graduations horaires
   const ticks = [];
   const d0 = new Date(start); d0.setMinutes(0,0,0);
   for (let ms = d0.getTime(); ms <= end.getTime(); ms += 3*3600e3) {
@@ -305,29 +364,72 @@ function chartSVG(now, t) {
     const hh = new Date(ms).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
     ticks.push(`<text x="${X(ms).toFixed(1)}" y="${H-6}" fill="rgba(255,255,255,.55)" font-size="10" text-anchor="middle">${hh}</text>`);
   }
-
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
     <defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#66d9ff" stop-opacity=".55"/>
-      <stop offset="1" stop-color="#0a6ab0" stop-opacity="0"/></linearGradient></defs>
-    <path d="${area}" fill="url(#fill)"/>
-    <path d="${line}" fill="none" stroke="#8fe3ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-    <line x1="${nx.toFixed(1)}" y1="${padT-6}" x2="${nx.toFixed(1)}" y2="${H-padB}" stroke="rgba(255,255,255,.55)" stroke-width="1.4" stroke-dasharray="4 4"/>
-    <circle cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="5" fill="#fff"/>
-    ${dots}${ticks.join("")}
-  </svg>`;
+      <stop offset="0" stop-color="#66d9ff" stop-opacity=".55"/><stop offset="1" stop-color="#0a6ab0" stop-opacity="0"/></linearGradient></defs>
+    <path class="${areaCls}" d="${area}" fill="url(#fill)"/>
+    <path class="${drawCls}" d="${line}" pathLength="1" fill="none" stroke="#8fe3ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <line id="nowLine" x1="${nx.toFixed(1)}" y1="${padT-8}" x2="${nx.toFixed(1)}" y2="${H-padB}" stroke="rgba(255,255,255,.55)" stroke-width="1.4" stroke-dasharray="4 4"/>
+    <circle id="nowPulse" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="5" fill="#8fe3ff"/>
+    <circle id="nowDot" cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="5" fill="#fff"/>
+    ${dots}${ticks.join("")}</svg>`;
+}
+
+// ---- Tick live (chaque seconde) : compte à rebours, niveau d'eau, marqueur
+function tickLive() {
+  const t = state.tides; if (!t.length) return;
+  const now = new Date();
+  const h = heightNow(now, t);
+  const { prev, next } = surrounding(now, t);
+
+  const hv = $("#heightVal"); if (hv && h != null) hv.textContent = metres(h);
+  const trend = $("#trendTxt"); if (trend && next) trend.textContent = isHigh(next) ? "Marée montante" : "Marée descendante";
+
+  // Niveau d'eau animé dans la carte héro
+  const water = $("#water");
+  if (water && waterRange && h != null) {
+    const lvl = Math.max(4, Math.min(100, (h - waterRange.lo) / ((waterRange.hi - waterRange.lo) || 1) * 100));
+    water.style.height = lvl + "%";
+  }
+
+  // Barre de progression entre deux marées
+  if (prev && next) {
+    const frac = Math.min(1, Math.max(0, (now - prev.date) / (next.date - prev.date)));
+    const bar = $("#progBar"); if (bar) bar.style.width = (frac * 100).toFixed(1) + "%";
+    const pf = $("#progFrom"), pt = $("#progTo");
+    if (pf) pf.textContent = prev.hhmm; if (pt) pt.textContent = next.hhmm;
+  }
+
+  // Compte à rebours (à la seconde)
+  const cd = $("#countdown"); if (cd && next) cd.textContent = "dans " + dur(next.date - now);
+
+  // Bascule de marée franchie → on reconstruit (met à jour listes & prochaine)
+  if (next && lastNextTs && +next.date !== lastNextTs) { renderAll(false); return; }
+
+  // Déplacement du marqueur "maintenant" sur la courbe
+  if (chart && now.getTime() >= chart.startMs && now.getTime() <= chart.endMs && h != null) {
+    const X = (ms) => chart.padL + (ms - chart.startMs) / (chart.endMs - chart.startMs) * (chart.W - chart.padL - chart.padR);
+    const Y = (hh) => chart.padT + (1 - (hh - chart.lo)/(chart.hi - chart.lo)) * (chart.H - chart.padT - chart.padB);
+    const nx = X(now.getTime()).toFixed(1), ny = Y(h).toFixed(1);
+    const nl = $("#nowLine"), nd = $("#nowDot"), np = $("#nowPulse");
+    if (nl) { nl.setAttribute("x1", nx); nl.setAttribute("x2", nx); }
+    if (nd) { nd.setAttribute("cx", nx); nd.setAttribute("cy", ny); }
+    if (np) { np.setAttribute("cx", nx); np.setAttribute("cy", ny); }
+  }
 }
 
 // ---- Chargement
 async function load() {
-  state.loading = true; state.error = null; render();
+  const first = !state.tides.length;
+  state.loading = true; state.error = null;
+  if (first) renderSkeleton(); else $("#headSpin").innerHTML = '<div class="spinner"></div>';
   try {
-    state.tides = await apiTides(state.port.lat, state.port.lon);
-    if (!state.tides.length) state.error = "Aucune donnée de marée pour ce port.";
-  } catch (e) {
-    state.error = "Impossible de charger les marées. Vérifie ta connexion.";
-  }
-  state.loading = false; render();
+    const fresh = await apiTides(state.port.lat, state.port.lon);
+    state.tides = fresh;
+    if (!fresh.length) state.error = "Aucune donnée de marée pour ce port.";
+  } catch { state.error = "Impossible de charger les marées. Vérifie ta connexion."; }
+  state.loading = false; $("#headSpin").innerHTML = "";
+  renderAll(true);
 }
 
 // ---- Recherche
@@ -348,7 +450,7 @@ $("#searchIn").oninput = (e) => {
           <svg viewBox="0 0 24 24" fill="none" stroke="var(--high)" stroke-width="2" style="width:20px;height:20px;flex:0 0 20px"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/></svg>
           <span>${p.nom}<small>${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}</small></span></button>`
       ).join("") || '<div style="padding:14px;color:var(--faint)">Aucun port trouvé.</div>';
-      Array.from(document.querySelectorAll(".result")).forEach((btn) => {
+      document.querySelectorAll(".result").forEach((btn) => {
         btn.onclick = () => {
           const p = list[+btn.dataset.i];
           state.port = { id: p.id, nom: p.nom, lat: p.lat, lon: p.lon, time_zone: p.time_zone };
@@ -361,11 +463,11 @@ $("#searchIn").oninput = (e) => {
 };
 
 // ---- Cycle de vie
-function startTick() { clearInterval(tick); tick = setInterval(render, 30000); }
+load();
+setInterval(tickLive, 1000);                 // mises à jour live à la seconde
+setInterval(() => renderAll(false), 15*60e3); // reslide la fenêtre de la courbe
+setInterval(() => { if (!document.hidden) load(); }, 30*60e3); // rafraîchit les données
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
-load(); startTick();
-
-// Service worker (mode hors-ligne léger)
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 </body>
