@@ -552,19 +552,19 @@ function renderAll(animate) {
         </div>` : ""}
     </section>
 
-    ${weatherCard(a(1))}
-
-    ${activityCard(a(2))}
-
-    <section class="card ${a(3)}">
-      <h2>Hauteur d'eau · aujourd'hui</h2>
-      <div id="chartHost">${chartSVG(todayYmd(), animate)}<div id="scrubTip"></div></div>
-    </section>
-
-    <section class="card ${a(4)}">
+    <section class="card ${a(1)}">
       <h2>Prévision · 10 jours</h2>
       <div class="fc-legend"><span>Coef.</span><span class="sep">·</span><span>marnage basse → haute (m)</span></div>
       <div class="fc-list" id="forecast">${forecastList()}</div>
+    </section>
+
+    ${weatherCard(a(2))}
+
+    ${activityCard(a(3))}
+
+    <section class="card ${a(4)}">
+      <h2>Hauteur d'eau · aujourd'hui</h2>
+      <div id="chartHost">${chartSVG(todayYmd(), animate)}<div id="scrubTip"></div></div>
     </section>`;
 
   tickLive(); // positionne niveau d'eau, barre, marqueur "maintenant"
