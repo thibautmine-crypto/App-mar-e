@@ -172,6 +172,39 @@
   .daygroup + .daygroup { border-top: 1px solid rgba(255,255,255,.12); margin-top: 8px; padding-top: 8px; }
   .dayname { font-size: 14px; font-weight: 600; color: var(--faint); margin: 4px 0; }
 
+  /* Prévision 10 jours (façon Météo Apple) */
+  .fc-legend { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--fainter); margin: -4px 0 8px; }
+  .fc-list { display: flex; flex-direction: column; }
+  .fc-day + .fc-day { border-top: 1px solid rgba(255,255,255,.10); }
+  .fc-head { display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 12px 2px; background: none; border: 0; color: var(--txt);
+    font-family: inherit; font-size: 15px; cursor: pointer; text-align: left;
+    transition: opacity .1s; }
+  .fc-head:active { opacity: .6; }
+  .fc-dow { flex: 0 0 38px; font-weight: 700; }
+  .fc-dow.today { color: var(--high); }
+  .fc-coef { flex: 0 0 32px; text-align: center; font-weight: 800; font-size: 14px;
+    font-variant-numeric: tabular-nums; }
+  .fc-coef.c0 { color: var(--fainter); }
+  .fc-coef.c1 { color: #bfe0ff; }   /* mortes-eaux */
+  .fc-coef.c2 { color: #9fe8d0; }   /* marées moyennes */
+  .fc-coef.c3 { color: #ffd98a; }   /* vives-eaux */
+  .fc-coef.c4 { color: #ff9e6b; }   /* grandes marées */
+  .fc-lo, .fc-hi { flex: 0 0 44px; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .fc-lo { text-align: right; color: var(--faint); }
+  .fc-hi { text-align: left; color: var(--txt); font-weight: 600; }
+  .fc-bar { flex: 1 1 auto; height: 6px; border-radius: 3px; position: relative;
+    background: rgba(255,255,255,.14); overflow: hidden; min-width: 36px; }
+  .fc-bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px;
+    background: linear-gradient(90deg, var(--low), var(--high)); }
+  .fc-chev { flex: 0 0 13px; width: 13px; height: 13px; color: var(--fainter); transition: transform .25s; }
+  .fc-day.open .fc-chev { transform: rotate(180deg); }
+  .fc-detail { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .32s cubic-bezier(.4,0,.2,1); }
+  .fc-day.open .fc-detail { grid-template-rows: 1fr; }
+  .fc-detail-in { overflow: hidden; min-height: 0; }
+  svg.daycurve { width: 100%; height: 116px; display: block; margin: 6px 0 2px; }
+  .fc-tides { margin-top: 2px; }
+
   svg.chart { width: 100%; height: 210px; display: block; }
   .draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.6s cubic-bezier(.4,0,.2,1) forwards; }
   @keyframes draw { to { stroke-dashoffset: 0; } }
@@ -255,7 +288,7 @@ const API_BASE = (window.MAREE_API_BASE ?? "/api");
 const DEFAULT_PORT = { id: 17, nom: "Saint-Malo", lat: 48.6539, lon: -2.01563, time_zone: "Europe/Paris" };
 const $ = (s) => document.querySelector(s);
 
-let state = { port: loadPort(), tides: [], hourly: [], daily: [], avis: [], lieu: null, selectedYmd: null, loading: false, error: null, stale: null };
+let state = { port: loadPort(), tides: [], hourly: [], daily: [], avis: [], lieu: null, selectedYmd: null, expandedYmd: null, loading: false, error: null, stale: null };
 let chart = null;        // paramètres géométriques de la courbe (pour le tick live)
 let waterRange = null;   // {lo, hi} du jour, pour le niveau d'eau animé
 let lastNextTs = null;   // timestamp de la prochaine marée connue (détection de bascule)
@@ -267,11 +300,6 @@ function savePort(p) { localStorage.setItem("maree.port", JSON.stringify(p)); }
 function ymdOf(date, tz) { return date.toLocaleDateString("sv-SE", { timeZone: tz || "Europe/Paris" }); }
 function todayYmd() { return ymdOf(new Date(), state.port.time_zone); }
 function ribbonYmds() { return [...new Set(state.tides.map((x) => x.ymd))].sort(); }
-function dayLabel(ymd) {
-  if (ymd === todayYmd()) return "Auj.";
-  if (ymd === ymdOf(new Date(Date.now() + 86400e3), state.port.time_zone)) return "Dem.";
-  return cap(new Date(ymd + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }).replace(".", ""));
-}
 function dayLabelLong(ymd) {
   if (ymd === todayYmd()) return "aujourd'hui";
   return new Date(ymd + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
@@ -318,27 +346,12 @@ function dayStrip(ymd) {
   if (s.teau != null) p.push(`🌊 ${s.teau}°`);
   return `<div class="daystrip">${p.join('<span class="sep">·</span>')}</div>`;
 }
-function ribbonPill(ymd, sel) {
-  const r = riskForYmd(ymd);
-  const dot = r.gale ? `<span class="rk rk-red"></span>` : (r.level > 0 ? `<span class="rk rk-amber"></span>` : "");
-  return `<button class="pill-day ${ymd === sel ? "sel" : ""}" data-ymd="${ymd}">${dayLabel(ymd)}${dot}</button>`;
-}
 function alertBanner(al) {
   const icon = al.gale ? "🌪" : "⚠︎";
   const label = al.gale ? "Avis de coup de vent" : (al.text || "Risque météo");
   const when = cap(dayLabelLong(al.ymd));
   return `<div class="alert ${al.gale ? "alert-red" : "alert-amber"}"><span class="ai">${icon}</span>
     <div><b>${label}</b><span>${when}${al.gale && al.force ? " · force " + al.force : ""}</span></div></div>`;
-}
-function wireRibbon() {
-  document.querySelectorAll(".pill-day").forEach((b) => {
-    b.onclick = () => {
-      state.selectedYmd = b.dataset.ymd;
-      renderAll(false);
-      const el = document.querySelector(".pill-day.sel");
-      if (el) el.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
-    };
-  });
 }
 
 // ---- Réseau
@@ -507,10 +520,6 @@ function renderAll(animate) {
   waterRange = today.length ? { lo: Math.min(...today.map(x=>x.hauteur)), hi: Math.max(...today.map(x=>x.hauteur)) }
                             : { lo: Math.min(...t.map(x=>x.hauteur)), hi: Math.max(...t.map(x=>x.hauteur)) };
 
-  const ribbon = ribbonYmds();
-  if (!state.selectedYmd || !ribbon.includes(state.selectedYmd)) state.selectedYmd = ribbon.includes(todayYmd()) ? todayYmd() : ribbon[0];
-  const selYmd = state.selectedYmd;
-  const selTides = t.filter((x) => x.ymd === selYmd);
   const al = upcomingAlert();
   const a = (i) => animate ? `enter" style="--d:${i*0.09}s` : "";
 
@@ -546,18 +555,20 @@ function renderAll(animate) {
     ${activityCard(a(2))}
 
     <section class="card ${a(3)}">
-      <h2>Hauteur d'eau</h2>
-      <div class="ribbon" id="ribbon">${ribbon.map((y) => ribbonPill(y, selYmd)).join("")}</div>
-      <div id="chartHost">${chartSVG(selYmd, animate)}<div id="scrubTip"></div></div>
-      ${dayStrip(selYmd)}
+      <h2>Hauteur d'eau · aujourd'hui</h2>
+      <div id="chartHost">${chartSVG(todayYmd(), animate)}<div id="scrubTip"></div></div>
+      ${dayStrip(todayYmd())}
     </section>
 
-    <section class="card ${a(4)}"><h2>Marées — ${cap(dayLabelLong(selYmd))}</h2>
-      ${selTides.map((x) => rowHTML(x, now)).join("")}</section>`;
+    <section class="card ${a(4)}">
+      <h2>Prévision · 10 jours</h2>
+      <div class="fc-legend"><span>Coef.</span><span class="sep">·</span><span>marnage basse → haute (m)</span></div>
+      <div class="fc-list" id="forecast">${forecastList()}</div>
+    </section>`;
 
   tickLive(); // positionne niveau d'eau, barre, marqueur "maintenant"
   wireChart(); // active le scrub tactile sur la courbe
-  wireRibbon(); // active le sélecteur de jour
+  wireForecast(); // active l'ouverture/fermeture des jours à venir
 }
 
 function renderSkeleton() {
@@ -656,6 +667,98 @@ function rowHTML(x, now) {
     ${x.coef!=null?`<span class="rcoef">${x.coef}</span>`:''}
     <span class="h">${metres(x.hauteur)} m</span>
     <span class="t">${x.hhmm}</span></div>`;
+}
+
+// ---- Prévision 10 jours (liste façon Météo Apple, un jour par ligne, dépliable)
+function coefClass(c) {
+  if (c == null) return "c0";
+  if (c >= 95) return "c4";   // grandes marées
+  if (c >= 70) return "c3";   // vives-eaux
+  if (c >= 45) return "c2";   // marées moyennes
+  return "c1";                // mortes-eaux
+}
+function forecastList() {
+  const ty = todayYmd();
+  const days = ribbonYmds().filter((y) => y >= ty).slice(0, 10);
+  if (!days.length) return "";
+  const perDay = days.map((ymd) => {
+    const ds = state.tides.filter((x) => x.ymd === ymd).sort((a, b) => a.date - b.date);
+    const hs = ds.map((x) => x.hauteur);
+    const coefs = ds.filter((x) => x.type === "PM" && x.coef != null).map((x) => x.coef);
+    return { ymd, ds, lo: Math.min(...hs), hi: Math.max(...hs), coef: coefs.length ? Math.max(...coefs) : null };
+  });
+  const gLo = Math.min(...perDay.map((d) => d.lo)), gHi = Math.max(...perDay.map((d) => d.hi));
+  const span = (gHi - gLo) || 1;
+  return perDay.map((d) => forecastRow(d, gLo, span, ty)).join("");
+}
+function forecastRow(d, gLo, span, ty) {
+  const open = d.ymd === state.expandedYmd;
+  const isToday = d.ymd === ty;
+  const L = ((d.lo - gLo) / span) * 100;
+  const Wd = Math.max(6, ((d.hi - d.lo) / span) * 100);
+  const dow = cap(new Date(d.ymd + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", ""));
+  const now = new Date();
+  return `<div class="fc-day ${open ? "open" : ""}" data-ymd="${d.ymd}">
+    <button class="fc-head" data-ymd="${d.ymd}" aria-expanded="${open}">
+      <span class="fc-dow ${isToday ? "today" : ""}">${dow}</span>
+      <span class="fc-coef ${coefClass(d.coef)}">${d.coef != null ? d.coef : "—"}</span>
+      <span class="fc-lo">${metres(d.lo)}</span>
+      <span class="fc-bar"><i style="left:${L.toFixed(1)}%;width:${Wd.toFixed(1)}%"></i></span>
+      <span class="fc-hi">${metres(d.hi)}</span>
+      <svg class="fc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div class="fc-detail"><div class="fc-detail-in">
+      ${dayCurveSVG(d.ymd)}
+      ${dayStrip(d.ymd)}
+      <div class="fc-tides">${d.ds.map((x) => rowHTML(x, now)).join("")}</div>
+    </div></div>
+  </div>`;
+}
+// Mini-courbe d'un jour (statique, sans marqueur "maintenant" ni scrub → pas d'ID en conflit)
+function dayCurveSVG(ymd) {
+  const t = state.tides;
+  const dayT = t.filter((x) => x.ymd === ymd).sort((a, b) => a.date - b.date);
+  if (dayT.length < 1) return "";
+  const W = 600, H = 130, padL = 6, padR = 6, padT = 22, padB = 20;
+  const start = new Date(dayT[0].date.getTime() - 3*3600e3), end = new Date(dayT[dayT.length-1].date.getTime() + 3*3600e3);
+  const pts = [];
+  for (let ms = start.getTime(); ms <= end.getTime(); ms += 600e3) { const hv = heightNow(new Date(ms), t); if (hv != null) pts.push([ms, hv]); }
+  if (pts.length < 2) return "";
+  const inWin = t.filter((x) => x.date >= start && x.date <= end);
+  const hs = pts.map((p) => p[1]).concat(inWin.map((x) => x.hauteur));
+  let lo = Math.min(...hs), hi = Math.max(...hs); const pad = (hi - lo) * 0.18 || 1; lo -= pad; hi += pad;
+  const X = (ms) => padL + (ms - start) / (end - start) * (W - padL - padR);
+  const Y = (h) => padT + (1 - (h - lo)/(hi - lo)) * (H - padT - padB);
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join(" ");
+  const area = `${line} L${X(pts[pts.length-1][0]).toFixed(1)} ${H-padB} L${X(pts[0][0]).toFixed(1)} ${H-padB} Z`;
+  const dots = inWin.map((x) => {
+    const cx = X(x.date.getTime()), cy = Y(x.hauteur), up = isHigh(x);
+    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3" fill="#fff"/>
+      <text x="${cx.toFixed(1)}" y="${(up ? cy-7 : cy+14).toFixed(1)}" fill="rgba(255,255,255,.92)" font-size="12" font-weight="700" text-anchor="middle">${x.hhmm}</text>
+      <text x="${cx.toFixed(1)}" y="${(up ? cy-19 : cy+25).toFixed(1)}" fill="rgba(255,255,255,.55)" font-size="10.5" text-anchor="middle">${metres(x.hauteur)} m</text>`;
+  }).join("");
+  return `<svg class="daycurve" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <defs><linearGradient id="fcg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#66d9ff" stop-opacity=".5"/><stop offset="1" stop-color="#0a6ab0" stop-opacity="0"/></linearGradient></defs>
+    <path d="${area}" fill="url(#fcg)"/>
+    <path d="${line}" fill="none" stroke="#8fe3ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    ${dots}</svg>`;
+}
+function wireForecast() {
+  document.querySelectorAll("#forecast .fc-head").forEach((b) => {
+    b.onclick = () => {
+      const y = b.dataset.ymd;
+      state.expandedYmd = state.expandedYmd === y ? null : y;
+      document.querySelectorAll("#forecast .fc-day").forEach((el) => {
+        const on = el.dataset.ymd === state.expandedYmd;
+        el.classList.toggle("open", on);
+        const head = el.querySelector(".fc-head");
+        if (head) head.setAttribute("aria-expanded", on ? "true" : "false");
+      });
+      const openEl = document.querySelector("#forecast .fc-day.open");
+      if (openEl) openEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    };
+  });
 }
 
 // ---- Courbe SVG
