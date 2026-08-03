@@ -190,15 +190,13 @@
   .fc-coef.c2 { color: #9fe8d0; }   /* marées moyennes */
   .fc-coef.c3 { color: #ffd98a; }   /* vives-eaux */
   .fc-coef.c4 { color: #ff9e6b; }   /* grandes marées */
-  .fc-lo, .fc-hi { flex: 0 0 44px; font-size: 14px; font-variant-numeric: tabular-nums; }
-  .fc-lo { text-align: right; color: var(--faint); }
-  .fc-hi { text-align: left; color: var(--txt); font-weight: 600; }
-  .fc-bar { flex: 1 1 auto; height: 6px; border-radius: 3px; position: relative;
-    background: rgba(255,255,255,.14); overflow: hidden; min-width: 36px; }
-  .fc-bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px;
-    background: linear-gradient(90deg, var(--low), var(--high)); }
-  .fc-now { position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%;
-    background: #fff; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px rgba(4,38,76,.55); }
+  /* Horaires PM/BM sur la ligne */
+  .fc-evs { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center;
+    justify-content: flex-end; gap: 3px 14px; }
+  .fc-ev { display: inline-flex; align-items: center; gap: 3px; font-size: 14px;
+    font-variant-numeric: tabular-nums; color: var(--faint); }
+  .fc-ev.up { color: var(--txt); font-weight: 600; }
+  .fc-ev svg { flex: 0 0 12px; width: 12px; height: 12px; }
   .fc-chev { flex: 0 0 13px; width: 13px; height: 13px; color: var(--fainter); transition: transform .25s; }
   .fc-day.open .fc-chev { transform: rotate(180deg); }
   .fc-detail { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .32s cubic-bezier(.4,0,.2,1); }
@@ -554,7 +552,7 @@ function renderAll(animate) {
 
     <section class="card ${a(1)}">
       <h2>Prévision · 10 jours</h2>
-      <div class="fc-legend"><span>Coef.</span><span class="sep">·</span><span>marnage basse → haute (m)</span></div>
+      <div class="fc-legend"><span>Coef.</span><span class="sep">·</span><span>↑ pleines &amp; ↓ basses mers</span></div>
       <div class="fc-list" id="forecast">${forecastList()}</div>
     </section>
 
@@ -684,34 +682,23 @@ function forecastList() {
   if (!days.length) return "";
   const perDay = days.map((ymd) => {
     const ds = state.tides.filter((x) => x.ymd === ymd).sort((a, b) => a.date - b.date);
-    const hs = ds.map((x) => x.hauteur);
     const coefs = ds.filter((x) => x.type === "PM" && x.coef != null).map((x) => x.coef);
-    return { ymd, ds, lo: Math.min(...hs), hi: Math.max(...hs), coef: coefs.length ? Math.max(...coefs) : null };
+    return { ymd, ds, coef: coefs.length ? Math.max(...coefs) : null };
   });
-  const gLo = Math.min(...perDay.map((d) => d.lo)), gHi = Math.max(...perDay.map((d) => d.hi));
-  const span = (gHi - gLo) || 1;
-  return perDay.map((d) => forecastRow(d, gLo, span, ty)).join("");
+  return perDay.map((d) => forecastRow(d, ty)).join("");
 }
-function forecastRow(d, gLo, span, ty) {
+function forecastRow(d, ty) {
   const open = d.ymd === state.expandedYmd;
   const isToday = d.ymd === ty;
-  const L = ((d.lo - gLo) / span) * 100;
-  const Wd = Math.max(6, ((d.hi - d.lo) / span) * 100);
   const dow = cap(new Date(d.ymd + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", ""));
   const now = new Date();
-  // Repère "niveau actuel" sur la ligne d'aujourd'hui (comme le point de Météo Apple)
-  let nowDot = "";
-  if (isToday) {
-    const h = heightNow(now, state.tides);
-    if (h != null) nowDot = `<span class="fc-now" style="left:${Math.max(0, Math.min(100, ((h - gLo) / span) * 100)).toFixed(1)}%"></span>`;
-  }
+  // Horaires des pleines / basses mers du jour, dans l'ordre chronologique
+  const evs = d.ds.map((x) => `<span class="fc-ev ${isHigh(x) ? "up" : "down"}">${arrow(isHigh(x))}<span>${x.hhmm}</span></span>`).join("");
   return `<div class="fc-day ${open ? "open" : ""}" data-ymd="${d.ymd}">
     <button class="fc-head" data-ymd="${d.ymd}" aria-expanded="${open}">
       <span class="fc-dow ${isToday ? "today" : ""}">${dow}</span>
       <span class="fc-coef ${coefClass(d.coef)}">${d.coef != null ? d.coef : "—"}</span>
-      <span class="fc-lo">${metres(d.lo)}</span>
-      <span class="fc-bar"><i style="left:${L.toFixed(1)}%;width:${Wd.toFixed(1)}%"></i>${nowDot}</span>
-      <span class="fc-hi">${metres(d.hi)}</span>
+      <span class="fc-evs">${evs}</span>
       <svg class="fc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
     </button>
     <div class="fc-detail"><div class="fc-detail-in">
