@@ -197,6 +197,8 @@
     background: rgba(255,255,255,.14); overflow: hidden; min-width: 36px; }
   .fc-bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px;
     background: linear-gradient(90deg, var(--low), var(--high)); }
+  .fc-now { position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%;
+    background: #fff; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px rgba(4,38,76,.55); }
   .fc-chev { flex: 0 0 13px; width: 13px; height: 13px; color: var(--fainter); transition: transform .25s; }
   .fc-day.open .fc-chev { transform: rotate(180deg); }
   .fc-detail { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .32s cubic-bezier(.4,0,.2,1); }
@@ -557,7 +559,6 @@ function renderAll(animate) {
     <section class="card ${a(3)}">
       <h2>Hauteur d'eau · aujourd'hui</h2>
       <div id="chartHost">${chartSVG(todayYmd(), animate)}<div id="scrubTip"></div></div>
-      ${dayStrip(todayYmd())}
     </section>
 
     <section class="card ${a(4)}">
@@ -698,12 +699,18 @@ function forecastRow(d, gLo, span, ty) {
   const Wd = Math.max(6, ((d.hi - d.lo) / span) * 100);
   const dow = cap(new Date(d.ymd + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", ""));
   const now = new Date();
+  // Repère "niveau actuel" sur la ligne d'aujourd'hui (comme le point de Météo Apple)
+  let nowDot = "";
+  if (isToday) {
+    const h = heightNow(now, state.tides);
+    if (h != null) nowDot = `<span class="fc-now" style="left:${Math.max(0, Math.min(100, ((h - gLo) / span) * 100)).toFixed(1)}%"></span>`;
+  }
   return `<div class="fc-day ${open ? "open" : ""}" data-ymd="${d.ymd}">
     <button class="fc-head" data-ymd="${d.ymd}" aria-expanded="${open}">
       <span class="fc-dow ${isToday ? "today" : ""}">${dow}</span>
       <span class="fc-coef ${coefClass(d.coef)}">${d.coef != null ? d.coef : "—"}</span>
       <span class="fc-lo">${metres(d.lo)}</span>
-      <span class="fc-bar"><i style="left:${L.toFixed(1)}%;width:${Wd.toFixed(1)}%"></i></span>
+      <span class="fc-bar"><i style="left:${L.toFixed(1)}%;width:${Wd.toFixed(1)}%"></i>${nowDot}</span>
       <span class="fc-hi">${metres(d.hi)}</span>
       <svg class="fc-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
     </button>
